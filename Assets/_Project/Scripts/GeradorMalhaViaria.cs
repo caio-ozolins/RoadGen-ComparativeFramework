@@ -10,8 +10,6 @@ namespace _Project.Scripts
     {
         [Header("Parâmetros do Terreno")]
         public Terrain terreno;
-        public int larguraMundo = 500;
-        public int profundidadeMundo = 500;
 
         [Header("Parâmetros de Geração (Random Walker)")]
         public int numeroDePassos = 50; // Antigo "numeroDeIteracoes"
@@ -45,7 +43,7 @@ namespace _Project.Scripts
         private void ExecutarAlgoritmoRandomWalk()
         {
             // Ponto de partida no centro do mapa
-            Vector3 posicaoAtual = new Vector3(larguraMundo / 2.0f, 0, profundidadeMundo / 2.0f);
+            Vector3 posicaoAtual = terreno.transform.position + new Vector3(terreno.terrainData.size.x / 2.0f, 0, terreno.terrainData.size.z / 2.0f);
 
             // Cria a primeira interseção
             Intersection intersecaoAnterior = new Intersection(ObterProximoId(), posicaoAtual);
