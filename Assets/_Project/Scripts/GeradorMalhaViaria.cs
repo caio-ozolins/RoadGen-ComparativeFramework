@@ -42,37 +42,41 @@ namespace _Project.Scripts
 
         private void ExecutarAlgoritmoRandomWalk()
         {
-            // Ponto de partida no centro do mapa
+            // Define o ponto de partida no centro do terreno.
             Vector3 posicaoAtual = terreno.transform.position + new Vector3(terreno.terrainData.size.x / 2.0f, 0, terreno.terrainData.size.z / 2.0f);
-
-            // Cria a primeira interseção
+            
+            // Ajusta a altura inicial.
+            posicaoAtual.y = terreno.SampleHeight(posicaoAtual);
+    
+            // Cria a interseção de origem.
             Intersection intersecaoAnterior = new Intersection(ObterProximoId(), posicaoAtual);
             _intersecoes.Add(intersecaoAnterior);
 
-            // Define uma direção inicial aleatória
+            // Define uma direção inicial aleatória.
             float anguloAtual = Random.Range(0, 360f);
 
-            // Loop principal do algoritmo
+            // Loop principal para criar cada segmento da estrada.
             for (int i = 0; i < numeroDePassos; i++)
             {
-                // 1. Altera levemente a direção
+                // Adiciona uma variação aleatória à direção para criar curvas.
                 anguloAtual += Random.Range(-anguloMaximoDeCurva, anguloMaximoDeCurva);
-
-                // Converte o ângulo em um vetor de direção 2D (no plano XZ)
                 Vector3 direcao = new Vector3(Mathf.Cos(anguloAtual * Mathf.Deg2Rad), 0, Mathf.Sin(anguloAtual * Mathf.Deg2Rad));
 
-                // 2. Anda para frente
+                // Move a posição atual para frente, no plano XZ.
                 posicaoAtual += direcao * tamanhoDoPasso;
+        
+                // Ajusta a altura da nova posição para seguir o relevo do terreno.
+                posicaoAtual.y = terreno.SampleHeight(posicaoAtual);
 
-                // 3. Cria a nova interseção
+                // Cria a nova interseção (nó) e a armazena.
                 Intersection novaIntersecao = new Intersection(ObterProximoId(), posicaoAtual);
                 _intersecoes.Add(novaIntersecao);
 
-                // 4. Cria a rua conectando a anterior com a nova
+                // Cria a rua (aresta) conectando a interseção anterior com a nova.
                 Road novaRua = new Road(ObterProximoId(), intersecaoAnterior, novaIntersecao);
                 _ruas.Add(novaRua);
 
-                // Atualiza a interseção anterior para a próxima iteração
+                // Prepara para a próxima iteração.
                 intersecaoAnterior = novaIntersecao;
             }
 
