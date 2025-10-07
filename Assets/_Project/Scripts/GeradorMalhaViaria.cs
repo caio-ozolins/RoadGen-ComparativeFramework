@@ -18,6 +18,7 @@ namespace _Project.Scripts
         public float anguloMaximoDeCurva = 15.0f; // O quanto a direção pode mudar a cada passo
         [Range(0, 90)]
         public float inclinacaoMaxima = 30.0f; // Inclinação máxima em graus que uma rua pode ter.
+        public int maxTentativasDeDesvio = 5; // N.º de vezes que o agente tenta desviar antes de desistir.
 
         // Listas para armazenar os dados da nossa malha gerada
         private readonly List<Intersection> _intersecoes = new List<Intersection>();
@@ -44,59 +45,59 @@ namespace _Project.Scripts
 
         private void ExecutarAlgoritmoRandomWalk()
         {
-            // Define o ponto de partida no centro do terreno.
+            // Ponto de partida no centro do terreno.
             Vector3 posicaoAtual = terreno.transform.position + new Vector3(terreno.terrainData.size.x / 2.0f, 0, terreno.terrainData.size.z / 2.0f);
-            // Ajusta a altura inicial para a do terreno.
             posicaoAtual.y = terreno.SampleHeight(posicaoAtual);
             
-            // Cria a interseção de origem.
             Intersection intersecaoAnterior = new Intersection(ObterProximoId(), posicaoAtual);
             _intersecoes.Add(intersecaoAnterior);
 
-            // Define uma direção inicial aleatória.
             float anguloAtual = Random.Range(0, 360f);
+            int tentativasDeDesvio = 0; // Contador para evitar loops infinitos
 
-            // Loop principal para criar cada segmento da estrada.
             for (int i = 0; i < numeroDePassos; i++)
             {
                 // Adiciona uma variação aleatória à direção para criar curvas.
                 anguloAtual += Random.Range(-anguloMaximoDeCurva, anguloMaximoDeCurva);
                 Vector3 direcao = new Vector3(Mathf.Cos(anguloAtual * Mathf.Deg2Rad), 0, Mathf.Sin(anguloAtual * Mathf.Deg2Rad));
 
-                // Calcula a *próxima posição potencial* no plano XZ.
                 Vector3 proximaPosicao = posicaoAtual + direcao * tamanhoDoPasso;
                 
-                // --- INÍCIO DA NOVA LÓGICA DE VERIFICAÇÃO DE INCLINAÇÃO ---
-
-                // Converte a posição no mundo para uma posição normalizada no terreno (valor de 0 a 1).
                 float posXNormalizada = (proximaPosicao.x - terreno.transform.position.x) / terreno.terrainData.size.x;
                 float posZNormalizada = (proximaPosicao.z - terreno.transform.position.z) / terreno.terrainData.size.z;
 
-                // Pega a inclinação (em graus) no ponto alvo.
                 float inclinacao = terreno.terrainData.GetSteepness(posXNormalizada, posZNormalizada);
 
-                // Se a inclinação for maior que o nosso limite, interrompe a geração deste caminho.
+                // --- LÓGICA DE DESVIO ATUALIZADA ---
                 if (inclinacao > inclinacaoMaxima)
                 {
-                    Debug.Log($"Geração interrompida: inclinação de {inclinacao:F1}° excedeu o máximo de {inclinacaoMaxima}°.");
-                    break; // O comando 'break' encerra o loop 'for'.
+                    tentativasDeDesvio++; // Incrementa a tentativa
+                    
+                    if (tentativasDeDesvio >= maxTentativasDeDesvio)
+                    {
+                        Debug.Log($"Agente desistiu após {maxTentativasDeDesvio} tentativas de desvio.");
+                        break; // Desiste se muitas tentativas falharam.
+                    }
+
+                    // Força uma curva acentuada para a esquerda ou direita para tentar desviar.
+                    anguloAtual += Random.Range(90, 180) * (Random.value > 0.5f ? 1 : -1);
+                    
+                    i--; // Decrementa o contador do loop para que esta tentativa falha não conte como um "passo".
+                    continue; // Pula para a próxima iteração do loop, ignorando a criação da rua.
                 }
                 
-                // --- FIM DA NOVA LÓGICA ---
-
-                // Se a inclinação for aceitável, o processo continua...
+                // Se a inclinação for aceitável, reseta o contador de tentativas e continua.
+                tentativasDeDesvio = 0;
+                
                 posicaoAtual = proximaPosicao;
                 posicaoAtual.y = terreno.SampleHeight(posicaoAtual);
 
-                // Cria a nova interseção (nó) e a armazena.
                 Intersection novaIntersecao = new Intersection(ObterProximoId(), posicaoAtual);
                 _intersecoes.Add(novaIntersecao);
-
-                // Cria a rua (aresta) conectando a interseção anterior com a nova.
+                
                 Road novaRua = new Road(ObterProximoId(), intersecaoAnterior, novaIntersecao);
                 _ruas.Add(novaRua);
                 
-                // Prepara para a próxima iteração.
                 intersecaoAnterior = novaIntersecao;
             }
 
