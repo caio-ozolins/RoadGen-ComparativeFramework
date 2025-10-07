@@ -1,11 +1,11 @@
 namespace _Project.Scripts.Core
 {
     /// <summary>
-    /// Representa um segmento de via ou aresta que conecta duas interseções.
+    /// Represents a road segment or edge connecting two intersections.
     /// </summary>
     public class Road
     {
-        public int Id;
+        public readonly int Id;
         public readonly Intersection StartNode;
         public readonly Intersection EndNode;
 

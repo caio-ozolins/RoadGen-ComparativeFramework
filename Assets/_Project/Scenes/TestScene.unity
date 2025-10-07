@@ -130,7 +130,7 @@ GameObject:
   - component: {fileID: 1060832129}
   - component: {fileID: 1060832128}
   m_Layer: 0
-  m_Name: GeradorDeMalhaViaria
+  m_Name: RoadNetworkGenerator
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -148,12 +148,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 16cb6a0230071d757b3ba427c896f6fd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
-  terreno: {fileID: 1956774533}
-  larguraMundo: 500
-  profundidadeMundo: 500
-  numeroDePassos: 50
-  tamanhoDoPasso: 10
-  anguloMaximoDeCurva: 15
+  terrain: {fileID: 1956774533}
+  numberOfSteps: 50
+  stepSize: 10
+  maxTurnAngle: 15
+  maxSteepness: 30
+  maxDetourAttempts: 5
 --- !u!4 &1060832129
 Transform:
   m_ObjectHideFlags: 0

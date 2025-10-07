@@ -3,12 +3,12 @@ using UnityEngine;
 namespace _Project.Scripts.Core
 {
     /// <summary>
-    /// Representa uma interseção ou nó na malha viária.
+    /// Represents an intersection or node in the road network.
     /// </summary>
     public class Intersection
     {
-        public int Id;
-        public Vector3 Position;
+        public readonly int Id;
+        public readonly Vector3 Position;
 
         public Intersection(int id, Vector3 position)
         {
