@@ -149,11 +149,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: '::'
   terrain: {fileID: 1956774533}
-  numberOfSteps: 50
+  globalStepLimit: 1000
+  maxStepsPerAgent: 50
   stepSize: 10
   maxTurnAngle: 15
   maxSteepness: 30
-  maxDetourAttempts: 5
+  branchingChance: 0.1
 --- !u!4 &1060832129
 Transform:
   m_ObjectHideFlags: 0
@@ -318,7 +319,7 @@ GameObject:
   - component: {fileID: 1956774533}
   - component: {fileID: 1956774534}
   m_Layer: 0
-  m_Name: Terreno
+  m_Name: Terrain
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

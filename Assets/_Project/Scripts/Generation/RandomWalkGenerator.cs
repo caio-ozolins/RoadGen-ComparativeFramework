@@ -2,93 +2,119 @@ using System.Collections.Generic;
 using UnityEngine;
 using _Project.Scripts.Core;
 using _Project.Scripts.Generation.Abstractions;
+using _Project.Scripts.Generation.Agents;
 
 namespace _Project.Scripts.Generation
 {
-    /// <summary>
-    /// A pure C# class that implements the Random Walk algorithm logic.
-    /// </summary>
     public class RandomWalkGenerator : IRoadNetworkGenerator
     {
-        // Configuration parameters passed in by the orchestrator.
+        // Configuration parameters
         public Terrain Terrain;
-        public int NumberOfSteps;
+        public int GlobalStepLimit;
+        public int MaxStepsPerAgent;
         public float StepSize;
         public float MaxTurnAngle;
         public float MaxSteepness;
-        public int MaxDetourAttempts;
-
+        public float BranchingChance;
+        
+        // Internal state variables
+        private List<Intersection> _intersections;
+        private List<Road> _roads;
         private int _nextAvailableId;
 
         public (List<Intersection> intersections, List<Road> roads) Generate()
         {
-            var intersections = new List<Intersection>();
-            var roads = new List<Road>();
+            _intersections = new List<Intersection>();
+            _roads = new List<Road>();
             _nextAvailableId = 0;
 
-            // Start position at the center of the terrain.
-            Vector3 currentPosition = Terrain.transform.position + new Vector3(Terrain.terrainData.size.x / 2.0f, 0, Terrain.terrainData.size.z / 2.0f);
-            currentPosition.y = Terrain.SampleHeight(currentPosition);
+            var activeAgents = new List<Agent>();
 
-            Intersection previousIntersection = new Intersection(GetNextId(), currentPosition);
-            intersections.Add(previousIntersection);
-
-            float currentAngle = Random.Range(0, 360f);
+            Vector3 startPosition = Terrain.transform.position + new Vector3(Terrain.terrainData.size.x / 2.0f, 0, Terrain.terrainData.size.z / 2.0f);
+            startPosition.y = Terrain.SampleHeight(startPosition);
             
-            for (int i = 0; i < NumberOfSteps; i++)
+            var initialIntersection = new Intersection(GetNextId(), startPosition);
+            _intersections.Add(initialIntersection);
+
+            var initialAgent = new Agent(startPosition, Random.Range(0, 360f), initialIntersection);
+            activeAgents.Add(initialAgent);
+            
+            int globalSteps = 0;
+            while (activeAgents.Count > 0 && globalSteps < GlobalStepLimit)
             {
-                int detourAttempts = 0;
-                bool stepSuccessful = false;
+                var newAgentsThisIteration = new List<Agent>();
 
-                while (detourAttempts < MaxDetourAttempts)
+                for (int i = activeAgents.Count - 1; i >= 0; i--)
                 {
-                    float nextAngle = currentAngle + Random.Range(-MaxTurnAngle, MaxTurnAngle);
-                    Vector3 direction = new Vector3(Mathf.Cos(nextAngle * Mathf.Deg2Rad), 0, Mathf.Sin(nextAngle * Mathf.Deg2Rad));
-                    Vector3 nextPosition = currentPosition + direction * StepSize;
-
-                    float normalizedX = (nextPosition.x - Terrain.transform.position.x) / Terrain.terrainData.size.x;
-                    float normalizedZ = (nextPosition.z - Terrain.transform.position.z) / Terrain.terrainData.size.z;
+                    var agent = activeAgents[i];
+                    bool agentShouldContinue = ProcessAgentStep(agent, out List<Agent> newBranches);
                     
-                    if (normalizedX < 0 || normalizedX > 1 || normalizedZ < 0 || normalizedZ > 1)
+                    if (agentShouldContinue)
                     {
-                        // Agent is trying to go off the map, force a turn.
-                        currentAngle += Random.Range(90, 270);
-                        detourAttempts++;
-                        continue;
+                        newAgentsThisIteration.AddRange(newBranches);
                     }
-
-                    float steepness = Terrain.terrainData.GetSteepness(normalizedX, normalizedZ);
-
-                    if (steepness <= MaxSteepness)
+                    else
                     {
-                        // Path is valid, commit to the new position and angle.
-                        currentPosition = nextPosition;
-                        currentPosition.y = Terrain.SampleHeight(currentPosition);
-                        currentAngle = nextAngle;
-                        stepSuccessful = true;
-                        break; // Exit the while loop for detour attempts.
+                        activeAgents.RemoveAt(i);
                     }
-
-                    // Path is not valid, try another angle in the next attempt.
-                    detourAttempts++;
                 }
-
-                if (!stepSuccessful)
-                {
-                    Debug.Log($"Agent gave up after {MaxDetourAttempts} detour attempts.");
-                    break; // End the main for loop for this agent.
-                }
-
-                var newIntersection = new Intersection(GetNextId(), currentPosition);
-                intersections.Add(newIntersection);
-                var newRoad = new Road(GetNextId(), previousIntersection, newIntersection);
-                roads.Add(newRoad);
                 
-                previousIntersection = newIntersection;
+                activeAgents.AddRange(newAgentsThisIteration);
+                globalSteps++;
             }
+            
+            if (globalSteps >= GlobalStepLimit)
+                Debug.LogWarning($"[RandomWalkGenerator] Simulation stopped by global step limit of {GlobalStepLimit}.");
+    
+            Debug.Log($"[RandomWalkGenerator] Generation complete! {_intersections.Count} intersections and {_roads.Count} roads created.");
+            
+            return (_intersections, _roads);
+        }
+        
+        // VERSÃO SIMPLIFICADA PARA DIAGNÓSTICO
+        private bool ProcessAgentStep(Agent agent, out List<Agent> newAgents)
+        {
+            newAgents = new List<Agent>();
 
-            Debug.Log($"[RandomWalkGenerator] Generation complete! {intersections.Count} intersections and {roads.Count} roads created.");
-            return (intersections, roads);
+            if (agent.StepsTaken >= MaxStepsPerAgent)
+                return false; 
+
+            agent.DirectionAngle += Random.Range(-MaxTurnAngle, MaxTurnAngle);
+            Vector3 direction = new Vector3(Mathf.Cos(agent.DirectionAngle * Mathf.Deg2Rad), 0, Mathf.Sin(agent.DirectionAngle * Mathf.Deg2Rad));
+            Vector3 nextPosition = agent.Position + direction * StepSize;
+
+            float normalizedX = (nextPosition.x - Terrain.transform.position.x) / Terrain.terrainData.size.x;
+            float normalizedZ = (nextPosition.z - Terrain.transform.position.z) / Terrain.terrainData.size.z;
+                
+            if (normalizedX < 0 || normalizedX > 1 || normalizedZ < 0 || normalizedZ > 1)
+                return false; 
+
+            float steepness = Terrain.terrainData.GetSteepness(normalizedX, normalizedZ);
+            
+            if (steepness > MaxSteepness)
+            {
+                return false; // Agente para no primeiro obstáculo.
+            }
+    
+            var previousIntersection = agent.PreviousIntersection;
+            agent.Position = nextPosition;
+            agent.Position.y = Terrain.SampleHeight(agent.Position);
+            
+            var newIntersection = new Intersection(GetNextId(), agent.Position);
+            _intersections.Add(newIntersection);
+            var newRoad = new Road(GetNextId(), previousIntersection, newIntersection);
+            _roads.Add(newRoad);
+            
+            agent.StepsTaken++;
+            agent.PreviousIntersection = newIntersection;
+
+            if (Random.value < BranchingChance)
+            {
+                float newAngle = agent.DirectionAngle + (Random.value > 0.5f ? 90 : -90);
+                newAgents.Add(new Agent(agent.Position, newAngle, newIntersection));
+            }
+            
+            return true;
         }
         
         private int GetNextId()

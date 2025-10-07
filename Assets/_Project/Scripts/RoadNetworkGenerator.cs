@@ -9,15 +9,20 @@ namespace _Project.Scripts
     {
         [Header("Terrain Configuration")]
         public Terrain terrain;
-        [Header("Random Walker Parameters")]
-        public int numberOfSteps = 50;
+
+        [Header("Generation Parameters")]
+        public int globalStepLimit = 1000;
+        public int maxStepsPerAgent = 50;
         public float stepSize = 10.0f;
+        
+        [Header("Agent Parameters")]
         [Range(0, 45)]
         public float maxTurnAngle = 15.0f;
         [Range(0, 90)]
         public float maxSteepness = 30.0f;
-        [Range(0, 10)]
-        public int maxDetourAttempts = 5;
+        // O parâmetro de desvio foi removido nesta versão de teste.
+        [Range(0, 1)]
+        public float branchingChance = 0.1f;
 
         private readonly List<Intersection> _intersections = new List<Intersection>();
         private readonly List<Road> _roads = new List<Road>();
@@ -31,11 +36,12 @@ namespace _Project.Scripts
             var generator = new RandomWalkGenerator
             {
                 Terrain = this.terrain,
-                NumberOfSteps = this.numberOfSteps,
+                GlobalStepLimit = this.globalStepLimit,
+                MaxStepsPerAgent = this.maxStepsPerAgent,
                 StepSize = this.stepSize,
                 MaxTurnAngle = this.maxTurnAngle,
                 MaxSteepness = this.maxSteepness,
-                MaxDetourAttempts = this.maxDetourAttempts
+                BranchingChance = this.branchingChance
             };
             
             var result = generator.Generate();
