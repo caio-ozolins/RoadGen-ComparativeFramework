@@ -20,7 +20,7 @@ namespace _Project.Scripts
         public float maxTurnAngle = 15.0f;
         [Range(0, 90)]
         public float maxSteepness = 30.0f;
-        // O parâmetro de desvio foi removido nesta versão de teste.
+        // The detour parameter has been removed in this test version.
         [Range(0, 1)]
         public float branchingChance = 0.1f;
 

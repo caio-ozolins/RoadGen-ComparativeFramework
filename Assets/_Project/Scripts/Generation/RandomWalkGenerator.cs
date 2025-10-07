@@ -71,7 +71,7 @@ namespace _Project.Scripts.Generation
             return (_intersections, _roads);
         }
         
-        // VERSÃO SIMPLIFICADA PARA DIAGNÓSTICO
+        // SIMPLIFIED DIAGNOSTIC VERSION
         private bool ProcessAgentStep(Agent agent, out List<Agent> newAgents)
         {
             newAgents = new List<Agent>();
@@ -93,7 +93,7 @@ namespace _Project.Scripts.Generation
             
             if (steepness > MaxSteepness)
             {
-                return false; // Agente para no primeiro obstáculo.
+                return false; // Agent stops at the first obstacle.
             }
     
             var previousIntersection = agent.PreviousIntersection;
