@@ -214,13 +214,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2d0fa1afec35b5dcc87949ebbb893b96, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TerrainGenerator
-  terrain: {fileID: 0}
-  terrainWidth: 513
-  terrainLength: 513
-  terrainHeight: 200
-  noiseScale: 20
-  offsetX: 4203.006
-  offsetY: 4523.1484
+  terrain: {fileID: 1956774533}
+  noiseScale: 200
+  offsetX: 1266.3182
+  offsetY: 153.74315
 --- !u!1 &1902163224
 GameObject:
   m_ObjectHideFlags: 0

@@ -11,6 +11,14 @@ namespace _Project.Scripts.TerrainGeneration
         [Range(1, 200)]
         public float noiseScale = 25.0f;
         
+        [Header("Multi-Octave Parameters")]
+        [Range(1, 8)]
+        public int octaves = 4; // Número de camadas de ruído
+        [Range(0.1f, 1f)]
+        public float persistence = 0.5f; // Controla a diminuição da amplitude a cada oitava
+        [Range(1f, 4f)]
+        public float lacunarity = 2.0f; // Controla o aumento da frequência a cada oitava
+        
         // We add an offset to generate different terrains each time.
         public float offsetX = 100f;
         public float offsetY = 100f;
@@ -31,34 +39,46 @@ namespace _Project.Scripts.TerrainGeneration
                 return;
             }
 
-            Debug.Log("Starting adaptive terrain generation...");
+            Debug.Log("Starting multi-octave terrain generation...");
 
             var terrainData = terrain.terrainData;
-            
-            // Reads the dimensions from the existing terrain, as you suggested.
             int width = terrainData.heightmapResolution;
             int length = terrainData.heightmapResolution;
 
-            // Creates a 2D array with the dimensions read from the terrain.
             float[,] heights = new float[width, length];
 
-            // Loop to iterate through each point of the heightmap.
             for (int x = 0; x < width; x++)
             {
                 for (int y = 0; y < length; y++)
                 {
-                    // Calculates the coordinates for noise sampling.
-                    float sampleX = (x + offsetX) / noiseScale;
-                    float sampleY = (y + offsetY) / noiseScale;
-                    
-                    // Gets the Perlin noise value.
-                    float perlinValue = Mathf.PerlinNoise(sampleX, sampleY);
+                    // Variáveis para o cálculo das oitavas
+                    float amplitude = 1f;
+                    float frequency = 1f;
+                    float noiseHeight = 0f;
+                    float maxAmplitude = 0f;
 
-                    heights[x, y] = perlinValue;
+                    // Loop das oitavas (camadas de ruído)
+                    for (int i = 0; i < octaves; i++)
+                    {
+                        float sampleX = (x + offsetX) / noiseScale * frequency;
+                        float sampleY = (y + offsetY) / noiseScale * frequency;
+                
+                        // Usamos o ruído de Perlin, que varia de 0 a 1.
+                        float perlinValue = Mathf.PerlinNoise(sampleX, sampleY);
+                
+                        noiseHeight += perlinValue * amplitude;
+
+                        maxAmplitude += amplitude; // Usado para normalizar o resultado
+                
+                        amplitude *= persistence; // Amplitude diminui a cada oitava
+                        frequency *= lacunarity; // Frequência aumenta a cada oitava
+                    }
+            
+                    // Normaliza a altura final para garantir que ela permaneça entre 0 e 1.
+                    heights[x, y] = noiseHeight / maxAmplitude;
                 }
             }
-
-            // Applies the generated height array to the terrain.
+    
             terrainData.SetHeights(0, 0, heights);
             Debug.Log("Terrain generation complete!");
         }
