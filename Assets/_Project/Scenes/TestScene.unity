@@ -274,12 +274,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: '::'
   terrain: {fileID: 1956774533}
-  globalStepLimit: 1000
+  globalStepLimit: 2000
   maxStepsPerAgent: 50
-  stepSize: 10
+  stepSize: 5
   maxTurnAngle: 15
   maxSteepness: 30
-  branchingChance: 0.1
+  branchingChance: 0.15
   debugCostMapImage: {fileID: 1359996889}
 --- !u!4 &1060832129
 Transform:

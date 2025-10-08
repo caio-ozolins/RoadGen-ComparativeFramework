@@ -6,18 +6,34 @@ using _Project.Scripts.Generation.Agents;
 
 namespace _Project.Scripts.Generation
 {
+    /// <summary>
+    /// Implements a road network generator using a simple, multi-agent "random walk" approach.
+    /// This technique simulates organic, bottom-up growth where complex patterns emerge from simple local rules.
+    /// Agents are terminated when they go out of bounds or encounter obstacles like steep terrain.
+    /// </summary>
     public class RandomWalkGenerator : IRoadNetworkGenerator
     {
-        // Configuration parameters
+        // --- Configuration Parameters ---
+        [Header("System Configuration")]
         public Terrain Terrain;
+        
+        [Header("Generation Limits")]
+        [Tooltip("The total number of steps allowed across all agents before generation stops.")]
         public int GlobalStepLimit;
+        [Tooltip("The maximum number of steps a single agent can take before it is terminated.")]
         public int MaxStepsPerAgent;
+
+        [Header("Agent Behaviour")]
+        [Tooltip("The length of each road segment created by an agent.")]
         public float StepSize;
+        [Tooltip("The maximum angle (in degrees) an agent can turn in a single step.")]
         public float MaxTurnAngle;
+        [Tooltip("The maximum terrain steepness (in degrees) an agent can traverse.")]
         public float MaxSteepness;
+        [Tooltip("The probability (0 to 1) that an agent will create a new branching agent at an intersection.")]
         public float BranchingChance;
         
-        // Internal state variables
+        // --- Internal State ---
         private List<Intersection> _intersections;
         private List<Road> _roads;
         private int _nextAvailableId;
@@ -71,13 +87,17 @@ namespace _Project.Scripts.Generation
             return (_intersections, _roads);
         }
         
-        // SIMPLIFIED DIAGNOSTIC VERSION
+        /// <summary>
+        /// Processes a single step for an agent, determining if it should continue, stop, or branch.
+        /// </summary>
+        /// <param name="agent">The agent to process.</param>
+        /// <param name="newAgents">An output list of any new agents created via branching.</param>
+        /// <returns>True if the agent should continue, false if it should be terminated.</returns>
         private bool ProcessAgentStep(Agent agent, out List<Agent> newAgents)
         {
             newAgents = new List<Agent>();
 
-            if (agent.StepsTaken >= MaxStepsPerAgent)
-                return false; 
+            if (agent.StepsTaken >= MaxStepsPerAgent) return false; 
 
             agent.DirectionAngle += Random.Range(-MaxTurnAngle, MaxTurnAngle);
             Vector3 direction = new Vector3(Mathf.Cos(agent.DirectionAngle * Mathf.Deg2Rad), 0, Mathf.Sin(agent.DirectionAngle * Mathf.Deg2Rad));
@@ -86,15 +106,13 @@ namespace _Project.Scripts.Generation
             float normalizedX = (nextPosition.x - Terrain.transform.position.x) / Terrain.terrainData.size.x;
             float normalizedZ = (nextPosition.z - Terrain.transform.position.z) / Terrain.terrainData.size.z;
                 
-            if (normalizedX < 0 || normalizedX > 1 || normalizedZ < 0 || normalizedZ > 1)
-                return false; 
+            // AGENT TERMINATION: Stop if the agent goes outside the terrain boundaries.
+            if (normalizedX < 0 || normalizedX > 1 || normalizedZ < 0 || normalizedZ > 1) return false; 
 
             float steepness = Terrain.terrainData.GetSteepness(normalizedX, normalizedZ);
             
-            if (steepness > MaxSteepness)
-            {
-                return false; // Agent stops at the first obstacle.
-            }
+            // AGENT TERMINATION: The agent stops if the terrain ahead is too steep.
+            if (steepness > MaxSteepness) return false;
     
             var previousIntersection = agent.PreviousIntersection;
             agent.Position = nextPosition;
