@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using _Project.Scripts.Core;
 using _Project.Scripts.Generation;
+using _Project.Scripts.Generation.Analysis;
 
 namespace _Project.Scripts
 {
@@ -14,25 +15,40 @@ namespace _Project.Scripts
         public int globalStepLimit = 1000;
         public int maxStepsPerAgent = 50;
         public float stepSize = 10.0f;
-        
+
         [Header("Agent Parameters")]
         [Range(0, 45)]
         public float maxTurnAngle = 15.0f;
         [Range(0, 90)]
         public float maxSteepness = 30.0f;
-        // The detour parameter has been removed in this test version.
         [Range(0, 1)]
         public float branchingChance = 0.1f;
 
         private readonly List<Intersection> _intersections = new List<Intersection>();
         private readonly List<Road> _roads = new List<Road>();
+        
+        // Store the generated cost map
+        private CostMap _costMap;
 
         [ContextMenu("Generate Road Network")]
         private void Generate()
         {
-            Debug.Log("Orchestrator starting generation...");
+            Debug.Log("[Orchestrator] Starting generation process...");
             ClearPreviousNetwork();
+            
+            // --- Analysis Phase ---
+            Debug.Log("[Orchestrator] Analysis Phase: Generating Cost Map...");
+            var costMapGenerator = new CostMapGenerator();
+            _costMap = costMapGenerator.Generate(this.terrain);
 
+            if (_costMap == null)
+            {
+                Debug.LogError("[Orchestrator] Cost Map generation failed. Aborting road network generation.");
+                return;
+            }
+
+            // --- Generation Phase (Still using the old generator for now) ---
+            Debug.Log("[Orchestrator] Generation Phase: Initializing RandomWalkGenerator...");
             var generator = new RandomWalkGenerator
             {
                 Terrain = this.terrain,
@@ -43,7 +59,6 @@ namespace _Project.Scripts
                 MaxSteepness = this.maxSteepness,
                 BranchingChance = this.branchingChance
             };
-            
             var result = generator.Generate();
 
             _intersections.AddRange(result.intersections);
@@ -53,18 +68,28 @@ namespace _Project.Scripts
         [ContextMenu("Clear Road Network")]
         private void ClearPreviousNetwork()
         {
-            Debug.Log("Clearing previous network...");
+            Debug.Log("[Orchestrator] Clearing previous network...");
             _intersections.Clear();
             _roads.Clear();
         }
         
         private void OnDrawGizmos()
         {
-            if (_roads == null) return;
+            if (_intersections == null || _roads == null) return;
+            
+            // Draw roads
             Gizmos.color = Color.white;
-            foreach (var road in _roads) { Gizmos.DrawLine(road.StartNode.Position, road.EndNode.Position); }
+            foreach (var road in _roads)
+            {
+                Gizmos.DrawLine(road.StartNode.Position, road.EndNode.Position);
+            }
+            
+            // Draw intersections
             Gizmos.color = Color.red;
-            foreach (var intersection in _intersections) { Gizmos.DrawSphere(intersection.Position, 1.0f); }
+            foreach (var intersection in _intersections)
+            {
+                Gizmos.DrawSphere(intersection.Position, 1.0f);
+            }
         }
     }
 }
