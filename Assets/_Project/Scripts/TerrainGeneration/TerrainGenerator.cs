@@ -8,10 +8,16 @@ namespace _Project.Scripts.TerrainGeneration
         public Terrain terrain;
 
         [Header("Noise Parameters")]
-        [Range(1, 200)]
+        // --- CHANGE 1: Increased the maximum range for more control over smoothness ---
+        [Range(1, 1000)]
         public float noiseScale = 25.0f;
         
-        // Estes campos agora serão atualizados aleatoriamente a cada geração.
+        // --- CHANGE 2: Added a height multiplier for vertical control ---
+        [Tooltip("Controls the overall vertical scale of the terrain. Values < 1 flatten the terrain, > 1 exaggerate it.")]
+        [Range(0f, 1f)]
+        public float terrainHeightMultiplier = 0.5f;
+
+        // These fields will be updated randomly at generation.
         public float offsetX;
         public float offsetY;
 
@@ -25,8 +31,6 @@ namespace _Project.Scripts.TerrainGeneration
         [Range(1f, 4f)]
         public float lacunarity = 2.0f;
         
-        // Removemos o método OnValidate(), pois a randomização será feita no GenerateTerrain().
-
         [ContextMenu("Generate Terrain")]
         public void GenerateTerrain()
         {
@@ -36,7 +40,6 @@ namespace _Project.Scripts.TerrainGeneration
                 return;
             }
             
-            // Gera novos offsets aleatórios a cada execução.
             offsetX = Random.Range(0f, 9999f);
             offsetY = Random.Range(0f, 9999f);
 
@@ -44,13 +47,13 @@ namespace _Project.Scripts.TerrainGeneration
 
             var terrainData = terrain.terrainData;
             int width = terrainData.heightmapResolution;
-            int length = terrainData.heightmapResolution;
+            int height = terrainData.heightmapResolution;
 
-            float[,] heights = new float[width, length];
+            float[,] heights = new float[width, height];
 
             for (int x = 0; x < width; x++)
             {
-                for (int y = 0; y < length; y++)
+                for (int y = 0; y < height; y++)
                 {
                     float amplitude = 1f;
                     float frequency = 1f;
@@ -61,20 +64,19 @@ namespace _Project.Scripts.TerrainGeneration
                     {
                         float sampleX = (x + offsetX) / noiseScale * frequency;
                         float sampleY = (y + offsetY) / noiseScale * frequency;
-                        
                         float perlinValue = Mathf.PerlinNoise(sampleX, sampleY);
                         noiseHeight += perlinValue * amplitude;
-
                         maxAmplitude += amplitude;
-                        
                         amplitude *= persistence;
                         frequency *= lacunarity;
                     }
                     
-                    heights[x, y] = noiseHeight / maxAmplitude;
+                    // --- CHANGE 3: Apply the height multiplier to the final normalized height ---
+                    float normalizedHeight = noiseHeight / maxAmplitude;
+                    heights[x, y] = normalizedHeight * terrainHeightMultiplier;
                 }
             }
-    
+            
             terrainData.SetHeights(0, 0, heights);
             Debug.Log("Terrain generation complete!");
         }

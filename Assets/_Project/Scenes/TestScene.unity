@@ -274,9 +274,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: '::'
   terrain: {fileID: 1956774533}
-  globalStepLimit: 2000
+  globalStepLimit: 1000
   maxStepsPerAgent: 50
-  stepSize: 5
+  stepSize: 10
   maxTurnAngle: 15
   maxSteepness: 30
   branchingChance: 0.15
@@ -444,8 +444,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TerrainGenerator
   terrain: {fileID: 1956774533}
   noiseScale: 200
-  offsetX: 629.40857
-  offsetY: 3121.3245
+  terrainHeightMultiplier: 0.5
+  offsetX: 4884.4395
+  offsetY: 6050.3745
   octaves: 4
   persistence: 0.5
   lacunarity: 2
