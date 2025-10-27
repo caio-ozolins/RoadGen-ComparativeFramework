@@ -279,9 +279,7 @@ MonoBehaviour:
   stepSize: 10
   maxTurnAngle: 15
   maxSteepness: 30
-  branchingChance: 0.05
-  maxGenerationTimeSeconds: 10
-  maxActiveAgents: 3000
+  branchingChance: 0.15
   debugCostMapImage: {fileID: 1359996889}
 --- !u!4 &1060832129
 Transform:
@@ -447,8 +445,8 @@ MonoBehaviour:
   terrain: {fileID: 1956774533}
   noiseScale: 200
   terrainHeightMultiplier: 0.5
-  offsetX: 4884.4395
-  offsetY: 6050.3745
+  offsetX: 221.00504
+  offsetY: 2423.708
   octaves: 4
   persistence: 0.5
   lacunarity: 2
