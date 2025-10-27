@@ -283,6 +283,9 @@ MonoBehaviour:
   totalBranchingChance: 0.35
   minimumSegmentLength: 15
   numberOfPointsOfInterest: 10
+  addTransversalConnections: 1
+  maxConnectionDistance: 50
+  maxConnectionAttempts: 500
   maxGenerationTimeSeconds: 10
   maxActiveAgents: 2000
   debugCostMapImage: {fileID: 1359996889}
