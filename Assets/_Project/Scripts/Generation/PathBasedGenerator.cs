@@ -5,7 +5,7 @@ using _Project.Scripts.Generation.Analysis;
 using _Project.Scripts.Generation.Pathfinding;
 using UnityEngine;
 
-using Debug = UnityEngine.Debug; 
+using Debug = UnityEngine.Debug;
 
 namespace _Project.Scripts.Generation
 {
@@ -14,76 +14,86 @@ namespace _Project.Scripts.Generation
         // --- Configuration (Set by the Orchestrator) ---
         public Terrain Terrain { get; set; }
         public CostMap CostMap { get; set; }
-        public Vector2Int StartPoint { get; set; }
-        public Vector2Int EndPoint { get; set; }
-        
-        // --- NEW: Minimum Segment Length ---
         public float MinimumSegmentLength { get; set; }
 
+        // --- UPDATED: Use List of POIs ---
+        public List<Vector2Int> PointsOfInterest { get; set; }
+        // ----------------------------------
+
+        // --- Internal State ---
         private List<Intersection> _intersections;
         private List<Road> _roads;
         private int _nextAvailableId;
+        // --- NEW: Dictionary to track existing intersections by grid position ---
+        private Dictionary<Vector2Int, Intersection> _gridPositionToIntersection;
+        // --------------------------------------------------------------------
 
         public (List<Intersection> intersections, List<Road> roads) Generate()
         {
             _intersections = new List<Intersection>();
             _roads = new List<Road>();
             _nextAvailableId = 0;
+            // --- NEW: Initialize the dictionary ---
+            _gridPositionToIntersection = new Dictionary<Vector2Int, Intersection>();
+            // ------------------------------------
 
-            if (CostMap == null || Terrain == null)
+            if (CostMap == null || Terrain == null || PointsOfInterest == null)
             {
-                Debug.LogError("[PathBasedGenerator] CostMap or Terrain is null. Aborting.");
+                Debug.LogError("[PathBasedGenerator] CostMap, Terrain, or PointsOfInterest list is null. Aborting.");
                 return (_intersections, _roads);
             }
-            
+
+            if (PointsOfInterest.Count < 2)
+            {
+                Debug.LogWarning("[PathBasedGenerator] Requires at least 2 Points of Interest to generate a network. Aborting.");
+                return (_intersections, _roads);
+            }
+
             // Set a default minimum length if none was provided
-            if (MinimumSegmentLength <= 0) MinimumSegmentLength = 15.0f; 
+            if (MinimumSegmentLength <= 0) MinimumSegmentLength = 15.0f;
 
-            // 1. Find the optimal path
-            Debug.Log($"[PathBasedGenerator] Finding path from grid coordinates Start={StartPoint} to End={EndPoint}...");
+            // --- UPDATED: Connect POIs ---
             var pathfinder = new AStarPathfinder();
-            List<Node> pathNodes = pathfinder.FindPath(StartPoint.x, StartPoint.y, EndPoint.x, EndPoint.y, CostMap);
+            Vector2Int startPoi = PointsOfInterest[0]; // Assume the first POI (center) is the main hub
 
-            if (pathNodes == null)
-            {
-                Debug.LogError($"[PathBasedGenerator] A* search failed completely and returned null. No path found between {StartPoint} and {EndPoint}.");
-            }
-            else if (pathNodes.Count == 0)
-            {
-                Debug.LogWarning($"[PathBasedGenerator] A* search completed but returned an empty path. No path found between {StartPoint} and {EndPoint}.");
-            }
-            else
-            {
-                Debug.Log($"[PathBasedGenerator] A* search successful! Path found with {pathNodes.Count} nodes.");
-            }
+            Debug.Log($"[PathBasedGenerator] Connecting {PointsOfInterest.Count - 1} POIs to the central hub at {startPoi}...");
 
-            // 2. Build the network from the path
-            if (pathNodes is { Count: > 0 }) 
+            for (int i = 1; i < PointsOfInterest.Count; i++)
             {
-                Debug.Log($"[PathBasedGenerator] Building network along the path with minimum segment length: {MinimumSegmentLength}...");
-                BuildNetworkFromPath(pathNodes);
-                Debug.Log($"[PathBasedGenerator] Network build completed. {_intersections.Count} intersections, {_roads.Count} roads created.");
+                Vector2Int endPoi = PointsOfInterest[i];
+                Debug.Log($"[PathBasedGenerator] Finding path from {startPoi} to {endPoi}...");
+
+                List<Node> pathNodes = pathfinder.FindPath(startPoi.x, startPoi.y, endPoi.x, endPoi.y, CostMap);
+
+                if (pathNodes is { Count: > 0 })
+                {
+                    Debug.Log($"[PathBasedGenerator] Path found ({pathNodes.Count} nodes). Building/Merging network segment...");
+                    BuildNetworkFromPath(pathNodes);
+                }
+                else
+                {
+                    Debug.LogWarning($"[PathBasedGenerator] No path found between {startPoi} and {endPoi}. Skipping this connection.");
+                }
             }
-            
+            Debug.Log($"[PathBasedGenerator] Network generation process finished. Final count: {_intersections.Count} intersections, {_roads.Count} roads created.");
+            // -----------------------------
+
             return (_intersections, _roads);
         }
 
         /// <summary>
-        /// Iterates over a list of path nodes, creating Intersection and Road objects
-        /// while ensuring a minimum distance between intersections.
+        /// Iterates over a list of path nodes, creating/reusing Intersection objects
+        /// and creating Road objects, ensuring minimum distance and merging with existing network.
         /// </summary>
         private void BuildNetworkFromPath(List<Node> path)
         {
-            if (path.Count < 2)
-            {
-                Debug.LogWarning("[PathBasedGenerator] Path is too short to build a network (requires at least 2 nodes).");
-                return;
-            }
+             // Need at least two nodes (start and one more) to form a segment
+            if (path.Count < 2) return;
 
-            // --- UPDATED LOGIC: Path Simplification ---
-            
-            // Start with the first node always
-            Intersection lastPlacedIntersection = CreateIntersectionAtNode(path[0]);
+            // --- UPDATED LOGIC: Path Simplification AND Merging ---
+
+            // Get or create the starting intersection for this path segment
+            Intersection lastPlacedIntersection = GetOrCreateIntersectionAtNode(path[0]);
             float accumulatedDistance = 0f;
             Vector3 lastCheckedWorldPosition = lastPlacedIntersection.Position;
 
@@ -91,42 +101,63 @@ namespace _Project.Scripts.Generation
             {
                 Node currentNode = path[i];
                 Vector3 currentWorldPosition = ConvertNodeToWorldPosition(currentNode);
-                
-                // Calculate distance from the last *checked* A* node position
+
                 float segmentDistance = Vector3.Distance(currentWorldPosition, lastCheckedWorldPosition);
                 accumulatedDistance += segmentDistance;
-
-                // Update the last checked position for the next iteration's distance calculation
                 lastCheckedWorldPosition = currentWorldPosition;
 
-                // Place an intersection if the accumulated distance is sufficient
-                // OR if it's the very last node in the A* path
+                // Place/Get an intersection if distance is sufficient OR it's the last node
                 if (accumulatedDistance >= MinimumSegmentLength || i == path.Count - 1)
                 {
-                    Intersection newIntersection = CreateIntersectionAtNode(currentNode);
-                    
-                    // Create road segment connecting the last *placed* intersection to this new one
-                    var newRoad = new Road(GetNextId(), lastPlacedIntersection, newIntersection);
-                    _roads.Add(newRoad);
+                    // --- UPDATED: Use GetOrCreate ---
+                    Intersection currentIntersection = GetOrCreateIntersectionAtNode(currentNode);
+                    // -----------------------------
 
-                    // Update tracking variables
-                    lastPlacedIntersection = newIntersection;
-                    accumulatedDistance = 0f; // Reset distance accumulator
+                    // Avoid creating zero-length roads if the same intersection was retrieved
+                    if (currentIntersection != lastPlacedIntersection)
+                    {
+                         // Check if a road between these two intersections already exists (in either direction)
+                         // Simple check, could be optimized later if needed
+                         bool roadExists = _roads.Exists(r =>
+                             (r.StartNode == lastPlacedIntersection && r.EndNode == currentIntersection) ||
+                             (r.StartNode == currentIntersection && r.EndNode == lastPlacedIntersection));
+
+                        if (!roadExists)
+                        {
+                            var newRoad = new Road(GetNextId(), lastPlacedIntersection, currentIntersection);
+                            _roads.Add(newRoad);
+                        }
+                    }
+
+                    lastPlacedIntersection = currentIntersection;
+                    accumulatedDistance = 0f;
                 }
             }
             // ------------------------------------------
         }
-        
+
         /// <summary>
-        /// Helper method to create an Intersection object at a node's location.
-        /// Handles coordinate conversion and adds the intersection to the list.
+        /// Gets an existing Intersection at the node's grid position or creates a new one if none exists.
+        /// Handles coordinate conversion and adds the intersection to the list and dictionary if new.
         /// </summary>
-        private Intersection CreateIntersectionAtNode(Node node)
+        private Intersection GetOrCreateIntersectionAtNode(Node node)
         {
-            Vector3 worldPosition = ConvertNodeToWorldPosition(node);
-            var newIntersection = new Intersection(GetNextId(), worldPosition);
-            _intersections.Add(newIntersection);
-            return newIntersection;
+            Vector2Int gridPos = new Vector2Int(node.X, node.Y);
+
+            // Check if an intersection already exists at this grid position
+            if (_gridPositionToIntersection.TryGetValue(gridPos, out Intersection existingIntersection))
+            {
+                return existingIntersection; // Reuse existing
+            }
+            else
+            {
+                // Create new intersection
+                Vector3 worldPosition = ConvertNodeToWorldPosition(node);
+                var newIntersection = new Intersection(GetNextId(), worldPosition);
+                _intersections.Add(newIntersection);
+                _gridPositionToIntersection.Add(gridPos, newIntersection); // Add to dictionary
+                return newIntersection;
+            }
         }
 
         /// <summary>
@@ -142,7 +173,7 @@ namespace _Project.Scripts.Generation
             float worldY = Terrain.SampleHeight(new Vector3(worldX, 0, worldZ));
             return new Vector3(worldX, worldY, worldZ);
         }
-        
+
         private int GetNextId()
         {
             return _nextAvailableId++;

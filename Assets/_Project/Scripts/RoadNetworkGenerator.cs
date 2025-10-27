@@ -5,13 +5,14 @@ using _Project.Scripts.Generation;
 using _Project.Scripts.Generation.Analysis;
 using _Project.Scripts.Generation.Abstractions;
 using UnityEngine.UI;
+using Random = UnityEngine.Random; // Explicitly use UnityEngine.Random
 
 namespace _Project.Scripts
 {
     public enum GenerationTechnique
     {
         AgentBased_RandomWalk,
-        PathBased_AStar
+        PathBased_AStar_POIs // Renamed for clarity
     }
 
     public class RoadNetworkGenerator : MonoBehaviour
@@ -36,14 +37,14 @@ namespace _Project.Scripts
         [Range(0, 5)]
         public float totalBranchingChance = 1.0f;
 
-        // --- UPDATED: Removed Start/End Point from Inspector ---
-        // [Header("Path Parameters (A*)")]
-        // public Vector2Int startPoint = Vector2Int.zero;
-        // public Vector2Int endPoint = new Vector2Int(100, 100);
-        [Header("Path Parameters (A*)")] // Kept header for clarity
-        [Tooltip("The minimum desired length for road segments created by the PathBased generator.")]
+        [Header("Path Parameters (A*)")]
+        [Tooltip("The minimum desired length for road segments.")]
         public float minimumSegmentLength = 15.0f;
-        // --------------------------------------------------------
+        // --- NEW: Number of POIs ---
+        [Tooltip("Number of random Points of Interest to generate and connect (including the center). Minimum 2.")]
+        [Range(2, 50)] // Added a sensible range
+        public int numberOfPointsOfInterest = 5;
+        // ---------------------------
 
         [Header("Safety Limits")]
         public float maxGenerationTimeSeconds = 10f;
@@ -52,6 +53,9 @@ namespace _Project.Scripts
         private readonly List<Intersection> _intersections = new List<Intersection>();
         private readonly List<Road> _roads = new List<Road>();
         private CostMap _costMap;
+        // --- NEW: Store POIs for Gizmos ---
+        private List<Vector2Int> _pointsOfInterest = new List<Vector2Int>();
+        // ---------------------------------
 
         [Header("Debug")]
         public RawImage debugCostMapImage;
@@ -73,12 +77,15 @@ namespace _Project.Scripts
             }
 
             IRoadNetworkGenerator generator = null;
+            // Clear POIs for the new generation
+            _pointsOfInterest.Clear(); 
 
             switch (selectedTechnique)
             {
                 case GenerationTechnique.AgentBased_RandomWalk:
                     Debug.Log("[Orchestrator] Initializing AgentBased_RandomWalk generator...");
-                    generator = new RandomWalkGenerator
+                    generator = new RandomWalkGenerator { /* ... existing parameters ... */ }; // (Keep existing setup)
+                     generator = new RandomWalkGenerator
                     {
                         Terrain = this.terrain,
                         GlobalStepLimit = this.globalStepLimit,
@@ -92,39 +99,40 @@ namespace _Project.Scripts
                     };
                     break;
 
-                case GenerationTechnique.PathBased_AStar:
-                    Debug.Log("[Orchestrator] Initializing PathBased_AStar generator...");
+                case GenerationTechnique.PathBased_AStar_POIs: // Updated Enum name
+                    Debug.Log("[Orchestrator] Initializing PathBased_AStar_POIs generator...");
 
-                    // --- NEW: Calculate Center Start and Random End ---
+                    // --- NEW: Generate Points of Interest ---
                     int gridWidth = _costMap.Width;
                     int gridHeight = _costMap.Height;
-
-                    // Calculate center point
                     Vector2Int centerPoint = new Vector2Int(gridWidth / 2, gridHeight / 2);
+                    _pointsOfInterest.Add(centerPoint); // Center is always a POI
 
-                    // Generate random end point within bounds
-                    Vector2Int randomEndPoint = new Vector2Int(
-                        Random.Range(0, gridWidth),
-                        Random.Range(0, gridHeight)
-                    );
-
-                    // Ensure start and end points are not the same
-                    while (randomEndPoint == centerPoint)
+                    for (int i = 1; i < numberOfPointsOfInterest; i++) // Generate N-1 random points
                     {
-                         randomEndPoint = new Vector2Int(Random.Range(0, gridWidth), Random.Range(0, gridHeight));
-                         Debug.Log("[Orchestrator] Generated EndPoint was same as CenterPoint, regenerating EndPoint...");
+                        Vector2Int randomPoi = new Vector2Int(
+                            Random.Range(0, gridWidth),
+                            Random.Range(0, gridHeight)
+                        );
+                        // Very simple check to avoid exact duplicates, could be improved
+                        if (!_pointsOfInterest.Contains(randomPoi)) 
+                        {
+                            _pointsOfInterest.Add(randomPoi);
+                        }
+                        else
+                        {
+                            i--; // Try again if duplicate
+                        }
                     }
-
-                    Debug.Log($"[Orchestrator] PathBased_AStar: StartPoint={centerPoint}, EndPoint={randomEndPoint}");
-                    // --------------------------------------------------
+                    Debug.Log($"[Orchestrator] Generated {_pointsOfInterest.Count} Points of Interest.");
+                    // ----------------------------------------
 
                     generator = new PathBasedGenerator
                     {
                         Terrain = this.terrain,
                         CostMap = this._costMap,
-                        // --- UPDATED: Use calculated points ---
-                        StartPoint = centerPoint,
-                        EndPoint = randomEndPoint,
+                        // --- UPDATED: Pass the list of POIs ---
+                        PointsOfInterest = _pointsOfInterest, 
                         // ------------------------------------
                         MinimumSegmentLength = this.minimumSegmentLength
                     };
@@ -147,43 +155,42 @@ namespace _Project.Scripts
                  Debug.LogError($"[Orchestrator] Failed to create a generator instance for {selectedTechnique}.");
             }
         }
-
-        // --- UPDATED: OnDrawGizmos removed visualization for Inspector points ---
+        
         private void OnDrawGizmos()
         {
-            // Draw existing network
-            if (_intersections != null && _roads != null)
+            // Draw existing network (remains the same)
+            if (_intersections != null && _roads != null) { /* ... */ }
+             if (_intersections != null && _roads != null) 
             {
                 Gizmos.color = Color.white;
-                foreach (var road in _roads)
-                {
-                    if (road?.StartNode != null && road.EndNode != null)
-                    {
-                        Gizmos.DrawLine(road.StartNode.Position, road.EndNode.Position);
-                    }
-                }
-
+                foreach (var road in _roads) { if (road?.StartNode != null && road.EndNode != null) { Gizmos.DrawLine(road.StartNode.Position, road.EndNode.Position); } }
                 Gizmos.color = Color.red;
-                foreach (var intersection in _intersections)
+                foreach (var intersection in _intersections) { if (intersection != null) { Gizmos.DrawSphere(intersection.Position, 1.0f); } }
+            }
+
+            // --- NEW: Visualize Points of Interest ---
+            if (selectedTechnique == GenerationTechnique.PathBased_AStar_POIs && _pointsOfInterest != null && terrain != null && terrain.terrainData != null)
+            {
+                Gizmos.color = Color.yellow; // Yellow for POIs
+                foreach (Vector2Int poi in _pointsOfInterest)
                 {
-                     if (intersection != null)
-                     {
-                        Gizmos.DrawSphere(intersection.Position, 1.0f);
-                     }
+                    Vector3 poiWorldPos = ConvertGridToWorldPosition(poi);
+                    Gizmos.DrawSphere(poiWorldPos, 5.0f); // Draw a larger sphere
+                    Gizmos.DrawLine(poiWorldPos, poiWorldPos + Vector3.up * 20f); // Line upwards
                 }
             }
-            // Gizmos for specific start/end points are removed as they are now dynamic
+            // ----------------------------------------
         }
-        // -----------------------------------------------------------------------
 
         // ... (ClearPreviousNetwork, VisualizeCostMap, ConvertGridToWorldPosition remain unchanged) ...
-
+        
         [ContextMenu("Clear Road Network")]
         private void ClearPreviousNetwork()
         {
             Debug.Log("[Orchestrator] Clearing previous network...");
             _intersections.Clear();
             _roads.Clear();
+            _pointsOfInterest.Clear(); // Also clear POIs when clearing network
         }
 
         private Vector3 ConvertGridToWorldPosition(Vector2Int gridPoint) // Keep this helper function
@@ -205,26 +212,13 @@ namespace _Project.Scripts
         [ContextMenu("Visualize Cost Map")]
         private void VisualizeCostMap()
         {
-            if (_costMap == null)
-            {
-                Debug.LogWarning("[Orchestrator] Cost Map has not been generated yet. Please run 'Generate Road Network' first.");
-                return;
-            }
-            if (debugCostMapImage == null)
-            {
-                Debug.LogWarning("[Orchestrator] No RawImage assigned to 'debugCostMapImage' field. Cannot visualize cost map.");
-                return;
-            }
-            int width = _costMap.Width;
-            int height = _costMap.Height;
-            Texture2D costMapTexture = new Texture2D(width, height);
-            float maxCost = 0f;
-            for (int y = 0; y < height; y++) { for (int x = 0; x < width; x++) { if (_costMap.GetCost(x, y) > maxCost) { maxCost = _costMap.GetCost(x, y); } } }
-            if (Mathf.Approximately(maxCost, 0)) maxCost = 1.0f;
-            for (int y = 0; y < height; y++) { for (int x = 0; x < width; x++) { float cost = _costMap.GetCost(x, y); float normalizedCost = cost / maxCost; Color pixelColor = new Color(normalizedCost, normalizedCost, normalizedCost); costMapTexture.SetPixel(x, y, pixelColor); } }
-            costMapTexture.Apply();
-            debugCostMapImage.texture = costMapTexture;
-            Debug.Log($"[Orchestrator] Cost map visualized. Max cost found: {maxCost}");
+             if (_costMap == null) { Debug.LogWarning("[Orchestrator] Cost Map has not been generated yet. Please run 'Generate Road Network' first."); return; }
+             if (debugCostMapImage == null) { Debug.LogWarning("[Orchestrator] No RawImage assigned to 'debugCostMapImage' field. Cannot visualize cost map."); return; }
+             int width = _costMap.Width; int height = _costMap.Height; Texture2D costMapTexture = new Texture2D(width, height);
+             float maxCost = 0f; for (int y = 0; y < height; y++) { for (int x = 0; x < width; x++) { if (_costMap.GetCost(x, y) > maxCost) { maxCost = _costMap.GetCost(x, y); } } }
+             if (Mathf.Approximately(maxCost, 0)) maxCost = 1.0f;
+             for (int y = 0; y < height; y++) { for (int x = 0; x < width; x++) { float cost = _costMap.GetCost(x, y); float normalizedCost = cost / maxCost; Color pixelColor = new Color(normalizedCost, normalizedCost, normalizedCost); costMapTexture.SetPixel(x, y, pixelColor); } }
+             costMapTexture.Apply(); debugCostMapImage.texture = costMapTexture; Debug.Log($"[Orchestrator] Cost map visualized. Max cost found: {maxCost}");
         }
     }
 }

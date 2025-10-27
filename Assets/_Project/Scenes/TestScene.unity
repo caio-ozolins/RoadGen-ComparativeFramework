@@ -281,8 +281,8 @@ MonoBehaviour:
   maxTurnAngle: 15
   maxSteepness: 30
   totalBranchingChance: 0.35
-  startPoint: {x: 0, y: 0}
-  endPoint: {x: 100, y: 100}
+  minimumSegmentLength: 15
+  numberOfPointsOfInterest: 10
   maxGenerationTimeSeconds: 10
   maxActiveAgents: 2000
   debugCostMapImage: {fileID: 1359996889}
