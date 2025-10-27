@@ -3,7 +3,7 @@ using UnityEngine;
 using _Project.Scripts.Core;
 using _Project.Scripts.Generation;
 using _Project.Scripts.Generation.Analysis;
-using UnityEngine.UI; // Make sure this is here
+using UnityEngine.UI;
 
 namespace _Project.Scripts
 {
@@ -22,17 +22,20 @@ namespace _Project.Scripts
         public float maxTurnAngle = 15.0f;
         [Range(0, 90)]
         public float maxSteepness = 30.0f;
-        [Range(0, 1)]
-        public float branchingChance = 0.1f;
+        
+        // --- UPDATED: Replaced Min/Max with your new model ---
+        [Header("Branching Behaviour (Divided Pool)")]
+        [Tooltip("The total branching 'pool'. This value is divided by the number of active agents to get the individual agent's branching chance.")]
+        [Range(0, 5)]
+        public float TotalBranchingChance = 1.0f; // A value of 1.0 means if there are 10 agents, each has a 10% chance
+        // ----------------------------------------------------
 
-        // --- NEW: SAFETY LIMITS FOR THE INSPECTOR ---
         [Header("Safety Limits")]
         [Tooltip("The maximum time in seconds the generation is allowed to run before a safety stop.")]
         public float maxGenerationTimeSeconds = 10f;
         
-        [Tooltip("The maximum number of active agents allowed. Prevents exponential explosion and crashes.")]
+        [Tooltip("The maximum number of active agents allowed. This is also used to calculate the branching decay.")]
         public int maxActiveAgents = 5000;
-        // ----------------------------------------------
 
         private readonly List<Intersection> _intersections = new List<Intersection>();
         private readonly List<Road> _roads = new List<Road>();
@@ -61,7 +64,7 @@ namespace _Project.Scripts
 
             Debug.Log("[Orchestrator] Generation Phase: Initializing RandomWalkGenerator...");
             
-            // --- UPDATED: Pass the safety limits from the Inspector to the generator ---
+            // --- UPDATED: Pass the new TotalBranchingChance ---
             var generator = new RandomWalkGenerator
             {
                 Terrain = this.terrain,
@@ -70,19 +73,23 @@ namespace _Project.Scripts
                 StepSize = this.stepSize,
                 MaxTurnAngle = this.maxTurnAngle,
                 MaxSteepness = this.maxSteepness,
-                BranchingChance = this.branchingChance,
                 
-                // Pass the new safety values
+                // Pass the new branching value
+                TotalBranchingChance = this.TotalBranchingChance,
+                
+                // Pass the safety values
                 MaxGenerationTimeSeconds = this.maxGenerationTimeSeconds,
                 MaxActiveAgents = this.maxActiveAgents
             };
-            // -------------------------------------------------------------------------
+            // --------------------------------------------------
             
             var result = generator.Generate();
 
             _intersections.AddRange(result.intersections);
             _roads.AddRange(result.roads);
         }
+
+        // ... (O resto do arquivo permanece o mesmo: ClearPreviousNetwork, OnDrawGizmos, VisualizeCostMap) ...
 
         [ContextMenu("Clear Road Network")]
         private void ClearPreviousNetwork()

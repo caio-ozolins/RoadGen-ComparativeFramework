@@ -279,9 +279,9 @@ MonoBehaviour:
   stepSize: 10
   maxTurnAngle: 15
   maxSteepness: 30
-  branchingChance: 0.05
+  TotalBranchingChance: 0.35
   maxGenerationTimeSeconds: 10
-  maxActiveAgents: 3000
+  maxActiveAgents: 2000
   debugCostMapImage: {fileID: 1359996889}
 --- !u!4 &1060832129
 Transform:
