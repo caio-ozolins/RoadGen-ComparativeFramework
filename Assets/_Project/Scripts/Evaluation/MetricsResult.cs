@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using System.Text;
-using System.Linq; 
+using System.Linq;
 
 namespace _Project.Scripts.Evaluation
 {
@@ -21,14 +21,15 @@ namespace _Project.Scripts.Evaluation
         public Dictionary<int, int> DegreeDistribution { get; set; } = new Dictionary<int, int>();
 
         // --- Geometric ---
-        /// <summary>
-        /// Average ratio of network path distance to Euclidean distance between sampled pairs of intersections.
-        /// Values >= 1.0. Lower is more direct. Double.NaN if calculation failed or not applicable.
-        /// </summary>
-        public double AverageCircuity { get; set; } = double.NaN; // Initialize to Not-a-Number
+        public double AverageCircuity { get; set; } = double.NaN;
 
         // --- Adaptability ---
-        // TODO: Add metrics like Average Steepness later
+        /// <summary>
+        /// Average steepness (angle in degrees) of all road segments in the network.
+        /// Lower values indicate better adaptation to flat terrain or contours.
+        /// double.NaN if calculation failed or not applicable.
+        /// </summary>
+        public double AverageRoadSteepness { get; set; } = double.NaN; // Initialize to Not-a-Number
 
         public override string ToString()
         {
@@ -56,11 +57,15 @@ namespace _Project.Scripts.Evaluation
                  sb.AppendLine("Degree Distribution: N/A");
             }
 
-            // --- NEW: Format Circuity ---
             sb.AppendLine(!double.IsNaN(AverageCircuity)
                 ? $"Average Circuity (Detour Index): {AverageCircuity:F3}"
                 : "Average Circuity (Detour Index): N/A");
-            // ---------------------------
+
+            // --- NEW: Format Average Steepness ---
+            sb.AppendLine(!double.IsNaN(AverageRoadSteepness)
+                ? $"Average Road Steepness: {AverageRoadSteepness:F1} degrees"
+                : "Average Road Steepness: N/A");
+            // ------------------------------------
 
             sb.AppendLine("----------------------------");
             return sb.ToString();
