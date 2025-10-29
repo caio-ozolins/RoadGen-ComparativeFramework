@@ -1,4 +1,6 @@
-using System.Text; // For StringBuilder
+using System.Collections.Generic;
+using System.Text;
+using System.Linq; // Needed for OrderBy in ToString
 
 namespace _Project.Scripts.Evaluation
 {
@@ -17,9 +19,12 @@ namespace _Project.Scripts.Evaluation
         // --- Road Lengths ---
         public float TotalRoadLength { get; set; }
         public float AverageRoadLength { get; set; }
-        
+
         // --- Structural (Graph) ---
-        // TODO: Add metrics like Degree Distribution later
+        /// <summary>
+        /// Stores the distribution of node degrees. Key = Degree (number of roads connected), Value = Count of intersections with that degree.
+        /// </summary>
+        public Dictionary<int, int> DegreeDistribution { get; set; } = new Dictionary<int, int>(); // Initialize to avoid nulls
 
         // --- Geometric ---
         // TODO: Add metrics like Circuity later
@@ -42,6 +47,23 @@ namespace _Project.Scripts.Evaluation
                 sb.AppendLine($"Total Road Length: {TotalRoadLength:F1} units");
                 sb.AppendLine($"Average Road Length: {AverageRoadLength:F1} units");
             }
+
+            // --- NEW: Format Degree Distribution ---
+            if (DegreeDistribution is { Count: > 0 })
+            {
+                sb.AppendLine("Degree Distribution (Degree: Count):");
+                // Order by degree for readability
+                foreach (var kvp in DegreeDistribution.OrderBy(pair => pair.Key))
+                {
+                    sb.AppendLine($"  {kvp.Key}: {kvp.Value}");
+                }
+            }
+            else
+            {
+                 sb.AppendLine("Degree Distribution: N/A");
+            }
+            // ------------------------------------
+
             sb.AppendLine("----------------------------");
             return sb.ToString();
         }

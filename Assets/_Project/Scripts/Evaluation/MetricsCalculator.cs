@@ -18,40 +18,36 @@ namespace _Project.Scripts.Evaluation
         /// <returns>A MetricsResult object containing the calculated values.</returns>
         public MetricsResult Calculate(List<Intersection> intersections, List<Road> roads, double generationTimeSeconds)
         {
-            var result = new MetricsResult();
-
-            // --- Efficiency ---
-            result.GenerationTimeSeconds = generationTimeSeconds;
-
-            // --- Basic Counts ---
-            result.IntersectionCount = intersections?.Count ?? 0;
-            result.RoadCount = roads?.Count ?? 0;
+            var result = new MetricsResult
+            {
+                // --- Efficiency ---
+                GenerationTimeSeconds = generationTimeSeconds,
+                // --- Basic Counts ---
+                IntersectionCount = intersections?.Count ?? 0,
+                RoadCount = roads?.Count ?? 0
+            };
 
             // --- Road Lengths ---
             if (result.RoadCount > 0)
             {
-                // --- ADDED NULL CHECK ---
-                if (roads != null) // Explicitly check if the list itself is not null
+                if (roads != null)
                 {
                     result.TotalRoadLength = 0f;
-                    foreach (var road in roads) // Now this loop is safe
+                    foreach (var road in roads)
                     {
-                        // Keep the inner null checks for road and its nodes
-                        if (road?.StartNode != null && road.EndNode != null)
+                        if (road is { StartNode: not null, EndNode: not null })
                         {
                             result.TotalRoadLength += Vector3.Distance(road.StartNode.Position, road.EndNode.Position);
                         }
                     }
-                    result.AverageRoadLength = result.TotalRoadLength / result.RoadCount;
+                    // Avoid division by zero if somehow RoadCount > 0 but no valid roads were found
+                    result.AverageRoadLength = result.RoadCount > 0 ? result.TotalRoadLength / result.RoadCount : 0f;
                 }
-                else // This case should technically not be reachable if RoadCount > 0, but handles the warning
+                else
                 {
                     result.TotalRoadLength = 0f;
                     result.AverageRoadLength = 0f;
-                    // Optionally log a warning here if this unexpected state occurs
-                    // Debug.LogWarning("[MetricsCalculator] RoadCount > 0 but roads list is null!");
                 }
-                // --- END OF ADDED CHECK ---
             }
             else
             {
@@ -59,17 +55,74 @@ namespace _Project.Scripts.Evaluation
                 result.AverageRoadLength = 0f;
             }
 
-            // ... (rest of the method) ...
+            // --- NEW: Calculate Degree Distribution ---
+            result.DegreeDistribution = CalculateDegreeDistribution(intersections, roads);
+            // ----------------------------------------
+
+            // --- Placeholder for future metrics ---
+            // result.Circuity = CalculateCircuity(...);
+            // result.AverageSteepness = CalculateAverageSteepness(...);
 
             return result;
         }
-        
-        // --- TODO: Add helper methods for more complex metrics later ---
-        /*
+
+        // --- NEW: Helper method for Degree Distribution ---
+        /// <summary>
+        /// Calculates the distribution of node degrees (number of roads connected to each intersection).
+        /// </summary>
+        /// <param name="intersections">List of intersections.</param>
+        /// <param name="roads">List of roads.</param>
+        /// <returns>A dictionary where Key = Degree, Value = Count of intersections with that degree.</returns>
         private Dictionary<int, int> CalculateDegreeDistribution(List<Intersection> intersections, List<Road> roads)
         {
-            // Implementation...
+            var distribution = new Dictionary<int, int>();
+            if (intersections == null || roads == null || intersections.Count == 0)
+            {
+                return distribution; // Return empty if no data
+            }
+
+            // 1. Count the degree for each intersection ID
+            var intersectionDegrees = new Dictionary<int, int>();
+            foreach (var intersection in intersections)
+            {
+                intersectionDegrees[intersection.Id] = 0; // Initialize all degrees to 0
+            }
+
+            foreach (var road in roads)
+            {
+                if (road?.StartNode != null)
+                {
+                    if (intersectionDegrees.ContainsKey(road.StartNode.Id))
+                    {
+                        intersectionDegrees[road.StartNode.Id]++;
+                    }
+                }
+                if (road?.EndNode != null)
+                {
+                     if (intersectionDegrees.ContainsKey(road.EndNode.Id))
+                     {
+                        intersectionDegrees[road.EndNode.Id]++;
+                     }
+                }
+            }
+
+            // 2. Aggregate the counts into the final distribution
+            foreach (var degree in intersectionDegrees.Values)
+            {
+                if (!distribution.TryAdd(degree, 1))
+                {
+                    distribution[degree]++;
+                }
+            }
+
+            return distribution;
         }
+        // -------------------------------------------------
+
+        // --- TODO: Add helper methods for more complex metrics later ---
+        /*
+        private float CalculateCircuity(...) { ... }
+        private float CalculateAverageSteepness(...) { ... }
         */
     }
 }
