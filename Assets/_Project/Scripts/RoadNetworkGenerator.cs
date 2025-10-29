@@ -6,14 +6,10 @@ using _Project.Scripts.Generation.Analysis;
 using _Project.Scripts.Generation.Abstractions;
 using UnityEngine.UI;
 using Random = UnityEngine.Random;
-// --- NEW: Added Usings ---
-using _Project.Scripts.Evaluation; // For MetricsCalculator and MetricsResult
-using System.Diagnostics; // For Stopwatch
-// -------------------------
+using _Project.Scripts.Evaluation;
+using System.Diagnostics;
 
-// --- NEW: Alias for Debug needed again ---
 using Debug = UnityEngine.Debug;
-// ---------------------------------------
 
 namespace _Project.Scripts
 {
@@ -21,45 +17,55 @@ namespace _Project.Scripts
     {
         AgentBasedRandomWalk,
         // ReSharper disable once InconsistentNaming
-        PathBasedAStarPOIs
+        PathBasedAStarPOIs,
+        LSystem
     }
 
     public class RoadNetworkGenerator : MonoBehaviour
     {
-        // ... (All existing parameters remain the same) ...
         [Header("System Configuration")]
         public Terrain terrain;
+
         [Header("Generation Technique")]
         public GenerationTechnique selectedTechnique = GenerationTechnique.AgentBasedRandomWalk;
-        [Header("General Generation Parameters")]
+
+        // --- General Parameters (Common or Agent-Based) ---
+        [Header("General / Agent Parameters")]
         public int globalStepLimit = 1000;
         public int maxStepsPerAgent = 50;
-        public float stepSize = 10.0f;
-        [Header("Agent Parameters (Random Walk)")]
-        [Range(0, 45)]
-        public float maxTurnAngle = 15.0f;
-        [Range(0, 90)]
-        public float maxSteepness = 30.0f;
-        [Header("Branching Behaviour (Divided Pool)")]
-        [Range(0, 5)]
-        public float totalBranchingChance = 1.0f;
-        [Header("Path Parameters (A*)")]
-        [Tooltip("The minimum desired length for road segments.")]
+        public float stepSize = 10.0f; // Also used by L-System as SegmentLength initially
+        [Range(0, 45)] public float maxTurnAngle = 15.0f; // Agent turning
+        [Range(0, 90)] public float maxSteepness = 30.0f; // Agent termination
+        [Header("Agent Branching (Divided Pool)")]
+        [Range(0, 5)] public float totalBranchingChance = 1.0f;
+
+        // --- Path-Based Parameters ---
+        [Header("Path Parameters (A* POIs)")]
         public float minimumSegmentLength = 15.0f;
-        [Tooltip("Number of random Points of Interest to generate and connect (including the center). Minimum 2.")]
-        [Range(2, 50)]
-        public int numberOfPointsOfInterest = 5;
+        [Range(2, 50)] public int numberOfPointsOfInterest = 5;
         [Header("Transversal Connections (A* POIs)")]
-        [Tooltip("Attempt to add secondary connections between existing roads.")]
         public bool addTransversalConnections = true;
-        [Tooltip("Maximum world distance to search for candidate intersections to connect.")]
         public float maxConnectionDistance = 50.0f;
-        [Tooltip("Maximum number of connection attempts to make in the second phase.")]
         public int maxConnectionAttempts = 100;
+
+        // --- NEW: L-System Parameters ---
+        [Header("L-System Parameters")]
+        [Tooltip("The starting string (axiom).")]
+        public string lSystemAxiom = "F";
+        [Tooltip("Number of rewriting iterations.")]
+        [Range(1, 7)] public int lSystemIterations = 4; // Higher values can explode quickly
+        [Tooltip("Angle (degrees) for '+' and '-' commands.")]
+        public float lSystemTurnAngle = 25.0f;
+        // Rules need a more complex way to be set in the Inspector (e.g., a list of structs or a custom editor).
+        // For now, we'll use a hardcoded default in the generator if none are provided programmatically.
+        // public Dictionary<char, string> lSystemRules = new Dictionary<char, string>(); // Cannot serialize Dictionary directly
+        // -------------------------------
+
         [Header("Safety Limits")]
         public float maxGenerationTimeSeconds = 10f;
         public int maxActiveAgents = 5000;
 
+        // --- Internal State ---
         private readonly List<Intersection> _intersections = new List<Intersection>();
         private readonly List<Road> _roads = new List<Road>();
         private CostMap _costMap;
@@ -74,7 +80,7 @@ namespace _Project.Scripts
             Debug.Log($"[Orchestrator] Starting generation process using: {selectedTechnique}");
             ClearPreviousNetwork();
 
-            // --- Cost Map Generation ---
+            // --- Cost Map (Generated regardless, might be useful for L-System later) ---
             Debug.Log("[Orchestrator] Analysis Phase: Generating Cost Map...");
             var costMapGenerator = new CostMapGenerator();
             _costMap = costMapGenerator.Generate(this.terrain);
@@ -93,7 +99,7 @@ namespace _Project.Scripts
             {
                 case GenerationTechnique.AgentBasedRandomWalk:
                     Debug.Log("[Orchestrator] Initializing AgentBasedRandomWalk generator...");
-                     generator = new RandomWalkGenerator // Corrected assignment
+                     generator = new RandomWalkGenerator
                     {
                         Terrain = this.terrain, GlobalStepLimit = this.globalStepLimit, MaxStepsPerAgent = this.maxStepsPerAgent,
                         StepSize = this.stepSize, MaxTurnAngle = this.maxTurnAngle, MaxSteepness = this.maxSteepness,
@@ -101,6 +107,7 @@ namespace _Project.Scripts
                         MaxActiveAgents = this.maxActiveAgents
                     };
                     break;
+
                 case GenerationTechnique.PathBasedAStarPOIs:
                     Debug.Log("[Orchestrator] Initializing PathBasedAStarPOIs generator...");
                      int gridWidth = _costMap.Width; int gridHeight = _costMap.Height; Vector2Int centerPoint = new Vector2Int(gridWidth / 2, gridHeight / 2);
@@ -114,6 +121,37 @@ namespace _Project.Scripts
                      };
                      generator = pathGenerator;
                     break;
+
+// --- NEW: L-System Case ---
+                case GenerationTechnique.LSystem:
+                    Debug.Log("[Orchestrator] Initializing LSystem generator...");
+                    
+                    // --- UPDATED: Use a standard branching rule set ---
+                    // Rule 1: F -> FF (Makes segments longer over iterations)
+                    // Rule 2: X -> F+[[X]-X]-F[-FX]+X (Complex branching rule)
+                    // Axiom: Start with X to kick off branching
+                    string axiom = "X"; // Start with X
+                    var defaultRules = new Dictionary<char, string> {
+                        { 'F', "FF" },
+                        { 'X', "F+[[X]-X]-F[-FX]+X" } 
+                    }; 
+                    // ---------------------------------------------------
+
+                    generator = new LSystemGenerator
+                    {
+                        Terrain = this.terrain,
+                        // --- UPDATED: Use the new axiom ---
+                        Axiom = axiom, 
+                        // Axiom = this.lSystemAxiom, // Use this if you want Axiom configurable in Inspector
+                        // ----------------------------------
+                        Iterations = this.lSystemIterations,
+                        TurnAngle = this.lSystemTurnAngle,
+                        SegmentLength = this.stepSize, 
+                        Rules = defaultRules 
+                    };
+                    break;
+                // --------------------------
+
                 default:
                     Debug.LogError($"[Orchestrator] Unknown GenerationTechnique selected: {selectedTechnique}");
                     return;
@@ -121,26 +159,20 @@ namespace _Project.Scripts
 
             // --- Generation Execution and Timing ---
             Debug.Log($"[Orchestrator] Executing {selectedTechnique} generator...");
-            Stopwatch generationStopwatch = new Stopwatch(); // Create a stopwatch for generation time
+            Stopwatch generationStopwatch = new Stopwatch();
             generationStopwatch.Start();
-
-            var result = generator.Generate(); // Execute the selected generator
-
-            generationStopwatch.Stop(); // Stop the timer immediately after generation finishes
-            double elapsedSeconds = generationStopwatch.Elapsed.TotalSeconds; // Get the elapsed time
-
+            var result = generator.Generate();
+            generationStopwatch.Stop();
+            double elapsedSeconds = generationStopwatch.Elapsed.TotalSeconds;
             _intersections.AddRange(result.intersections);
             _roads.AddRange(result.roads);
             Debug.Log($"[Orchestrator] Generation completed by {selectedTechnique} in {elapsedSeconds:F3} seconds.");
-            // ---------------------------------------
 
             // --- Metrics Calculation and Display ---
             Debug.Log("[Orchestrator] Calculating metrics...");
             var calculator = new MetricsCalculator();
-            MetricsResult metrics = calculator.Calculate(_intersections, _roads, elapsedSeconds); // Pass the measured time
-
-            Debug.Log(metrics.ToString()); // Print the formatted results to the console
-            // -------------------------------------
+            MetricsResult metrics = calculator.Calculate(_intersections, _roads, elapsedSeconds);
+            Debug.Log(metrics.ToString());
         }
 
         // ... (OnDrawGizmos, ClearPreviousNetwork, VisualizeCostMap, ConvertGridToWorldPosition remain unchanged) ...

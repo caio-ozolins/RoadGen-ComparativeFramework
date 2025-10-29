@@ -274,7 +274,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: '::'
   terrain: {fileID: 1956774533}
-  selectedTechnique: 0
+  selectedTechnique: 2
   globalStepLimit: 1000
   maxStepsPerAgent: 50
   stepSize: 10
@@ -286,6 +286,9 @@ MonoBehaviour:
   addTransversalConnections: 1
   maxConnectionDistance: 50
   maxConnectionAttempts: 500
+  lSystemAxiom: F
+  lSystemIterations: 4
+  lSystemTurnAngle: 25
   maxGenerationTimeSeconds: 10
   maxActiveAgents: 2000
   debugCostMapImage: {fileID: 1359996889}
