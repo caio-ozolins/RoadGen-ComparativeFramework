@@ -1,12 +1,9 @@
 using System.Collections.Generic;
 using System.Text;
-using System.Linq; // Needed for OrderBy in ToString
+using System.Linq; 
 
 namespace _Project.Scripts.Evaluation
 {
-    /// <summary>
-    /// A simple data class to store the calculated metrics for a generated road network.
-    /// </summary>
     public class MetricsResult
     {
         // --- Efficiency ---
@@ -21,20 +18,18 @@ namespace _Project.Scripts.Evaluation
         public float AverageRoadLength { get; set; }
 
         // --- Structural (Graph) ---
-        /// <summary>
-        /// Stores the distribution of node degrees. Key = Degree (number of roads connected), Value = Count of intersections with that degree.
-        /// </summary>
-        public Dictionary<int, int> DegreeDistribution { get; set; } = new Dictionary<int, int>(); // Initialize to avoid nulls
+        public Dictionary<int, int> DegreeDistribution { get; set; } = new Dictionary<int, int>();
 
         // --- Geometric ---
-        // TODO: Add metrics like Circuity later
+        /// <summary>
+        /// Average ratio of network path distance to Euclidean distance between sampled pairs of intersections.
+        /// Values >= 1.0. Lower is more direct. Double.NaN if calculation failed or not applicable.
+        /// </summary>
+        public double AverageCircuity { get; set; } = double.NaN; // Initialize to Not-a-Number
 
         // --- Adaptability ---
         // TODO: Add metrics like Average Steepness later
 
-        /// <summary>
-        /// Provides a formatted string representation of the metrics.
-        /// </summary>
         public override string ToString()
         {
             var sb = new StringBuilder();
@@ -48,11 +43,9 @@ namespace _Project.Scripts.Evaluation
                 sb.AppendLine($"Average Road Length: {AverageRoadLength:F1} units");
             }
 
-            // --- NEW: Format Degree Distribution ---
             if (DegreeDistribution is { Count: > 0 })
             {
                 sb.AppendLine("Degree Distribution (Degree: Count):");
-                // Order by degree for readability
                 foreach (var kvp in DegreeDistribution.OrderBy(pair => pair.Key))
                 {
                     sb.AppendLine($"  {kvp.Key}: {kvp.Value}");
@@ -62,7 +55,12 @@ namespace _Project.Scripts.Evaluation
             {
                  sb.AppendLine("Degree Distribution: N/A");
             }
-            // ------------------------------------
+
+            // --- NEW: Format Circuity ---
+            sb.AppendLine(!double.IsNaN(AverageCircuity)
+                ? $"Average Circuity (Detour Index): {AverageCircuity:F3}"
+                : "Average Circuity (Detour Index): N/A");
+            // ---------------------------
 
             sb.AppendLine("----------------------------");
             return sb.ToString();
