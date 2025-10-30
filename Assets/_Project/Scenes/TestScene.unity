@@ -921,7 +921,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6c257eeef5ca94a9b8d095b08e807dc3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::_Project.Scripts.Scenarios.ExperimentManager
-  repetitionsPerTechnique: 3
+  repetitionsPerTechnique: 30
   outputFilename: TCC_Experiment_Results.csv
   roadNetworkGenerator: {fileID: 1060832128}
 --- !u!4 &2055651461

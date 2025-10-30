@@ -100,3 +100,16 @@ InitTestScene*.unity*
 
 # Configurações de Editor
 .vscode/
+
+# --- Python Analysis Specific ---
+# Ignora a pasta de ambiente virtual
+.venv/
+venv/
+ENV/
+env/
+
+# Ignora caches do Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
