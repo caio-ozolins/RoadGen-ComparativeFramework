@@ -9,6 +9,14 @@ namespace _Project.Scripts.Evaluation
     public class MetricsCalculator
     {
         private const int CircuitySampleCount = 100;
+        
+        // --- NEW: Constant for angle histogram ---
+        /// <summary>
+        /// Defines the size (in degrees) of each bin for the intersection angle histogram.
+        /// E.g., 15 means bins will be 0, 15, 30, 45...
+        /// </summary>
+        private const int AngleBinSize = 15;
+        // ----------------------------------------
 
         public MetricsResult Calculate(List<Intersection> intersections, List<Road> roads, double generationTimeSeconds)
         {
@@ -42,10 +50,8 @@ namespace _Project.Scripts.Evaluation
             // --- Calculate Connectivity Metrics (Alpha & Gamma) ---
             if (v > 0 && e > 0)
             {
-                // P (Connected Components)
                 int p = CalculateConnectedComponents(intersections, roads);
 
-                // Alpha Index (Planar Graph): (E - V + P) / (2V - 5P)
                 double alphaDenominator = (2 * v) - (5 * p);
                 if (alphaDenominator > 0)
                 {
@@ -56,7 +62,6 @@ namespace _Project.Scripts.Evaluation
                     result.ConnectivityAlpha = (e - v + p == 0) ? 0 : double.NaN;
                 }
 
-                // Gamma Index (Planar Graph): E / (3V - 6P)
                 double gammaDenominator = (3 * v) - (6 * p);
                 if (gammaDenominator > 0)
                 {
@@ -72,10 +77,13 @@ namespace _Project.Scripts.Evaluation
                 result.ConnectivityAlpha = (v == 0 && e == 0) ? 0 : double.NaN;
                 result.ConnectivityGamma = (v == 0 && e == 0) ? 0 : double.NaN;
             }
-            // -----------------------------------------------------------
 
             // Circuity
             result.AverageCircuity = CalculateCircuity(intersections, roads);
+            
+            // --- NEW: Calculate Intersection Angle Distribution ---
+            result.IntersectionAngleDistribution = CalculateIntersectionAngleDistribution(intersections, roads);
+            // ----------------------------------------------------
 
             // Average Steepness
             result.AverageRoadSteepness = CalculateAverageSteepness(roads);
@@ -102,7 +110,6 @@ namespace _Project.Scripts.Evaluation
         {
              if (intersections == null || roads == null || intersections.Count < 2 || roads.Count == 0) { return double.NaN; }
              
-             // Build Adjacency List (for Dijkstra)
              var adjacencyList = new Dictionary<int, List<(int, float)>>();
              foreach(var i in intersections) adjacencyList[i.Id] = new List<(int, float)>();
              foreach(var road in roads)
@@ -163,22 +170,18 @@ namespace _Project.Scripts.Evaluation
             {
                 return double.NaN; // Not applicable
             }
-
             double totalSteepness = 0;
             int validRoadCount = 0;
-
             foreach (var road in roads)
             {
                 if (road is { StartNode: not null, EndNode: not null })
                 {
                     Vector3 startPos = road.StartNode.Position;
                     Vector3 endPos = road.EndNode.Position;
-                    
                     float dx = endPos.x - startPos.x;
                     float dz = endPos.z - startPos.z;
                     float horizontalDistance = Mathf.Sqrt(dx * dx + dz * dz);
                     float verticalDistance = Mathf.Abs(endPos.y - startPos.y);
-
                     if (horizontalDistance > 0.001f)
                     {
                         float angleRad = Mathf.Atan2(verticalDistance, horizontalDistance);
@@ -188,7 +191,6 @@ namespace _Project.Scripts.Evaluation
                     }
                 }
             }
-
             if (validRoadCount > 0)
             {
                 return totalSteepness / validRoadCount;
@@ -199,15 +201,10 @@ namespace _Project.Scripts.Evaluation
             }
         }
         
-        /// <summary>
-        /// Calculates the number of connected components (P) in the graph.
-        /// Uses Breadth-First Search (BFS) to traverse the graph.
-        /// </summary>
         private int CalculateConnectedComponents(List<Intersection> intersections, List<Road> roads)
         {
             if (intersections == null || intersections.Count == 0) return 0;
-
-            // Build a simple adjacency list (neighbor IDs only)
+            
             var adjacencyList = new Dictionary<int, List<int>>();
             var allIntersectionIds = new HashSet<int>();
             
@@ -216,7 +213,6 @@ namespace _Project.Scripts.Evaluation
                 adjacencyList[intersection.Id] = new List<int>();
                 allIntersectionIds.Add(intersection.Id);
             }
-
             if (roads != null)
             {
                 foreach (var road in roads)
@@ -234,26 +230,22 @@ namespace _Project.Scripts.Evaluation
 
             var visitedIntersectionIds = new HashSet<int>();
             int componentCount = 0;
-
+            
             foreach (var intersection in intersections)
             {
                 if (!visitedIntersectionIds.Contains(intersection.Id))
                 {
                     componentCount++;
-                    
                     var queue = new Queue<int>();
                     queue.Enqueue(intersection.Id);
                     visitedIntersectionIds.Add(intersection.Id);
-
                     while (queue.Count > 0)
                     {
                         int currentId = queue.Dequeue();
-                        
                         if (adjacencyList.TryGetValue(currentId, out var neighbors))
                         {
                             foreach (int neighborId in neighbors)
                             {
-                                // Add() returns 'true' if the item was new (i.e., not visited).
                                 if (visitedIntersectionIds.Add(neighborId))
                                 {
                                     queue.Enqueue(neighborId);
@@ -263,8 +255,107 @@ namespace _Project.Scripts.Evaluation
                     }
                 }
             }
-            
             return componentCount;
         }
+        
+        // --- NEW: Method to calculate intersection angles ---
+        /// <summary>
+        /// Calculates the distribution of angles between connected roads at each intersection.
+        /// Angles are measured on the 2D (XZ) plane and grouped into bins.
+        /// </summary>
+        private Dictionary<int, int> CalculateIntersectionAngleDistribution(List<Intersection> intersections, List<Road> roads)
+        {
+            var angleHistogram = new Dictionary<int, int>();
+            if (intersections == null || roads == null || roads.Count == 0)
+            {
+                return angleHistogram;
+            }
+
+            // 1. Build an adjacency list of 2D direction vectors
+            // Key: Intersection ID
+            // Value: List of normalized 2D (XZ) vectors pointing *away* from this intersection
+            var adjacencyVectors = new Dictionary<int, List<Vector2>>();
+            foreach (var intersection in intersections)
+            {
+                adjacencyVectors[intersection.Id] = new List<Vector2>();
+            }
+
+            foreach (var road in roads)
+            {
+                if (road is { StartNode: not null, EndNode: not null })
+                {
+                    // Get 2D positions (ignoring Y/height)
+                    Vector2 startPos = new Vector2(road.StartNode.Position.x, road.StartNode.Position.z);
+                    Vector2 endPos = new Vector2(road.EndNode.Position.x, road.EndNode.Position.z);
+
+                    // Vector from start to end
+                    Vector2 dirStartToEnd = (endPos - startPos).normalized;
+                    
+                    if (dirStartToEnd.sqrMagnitude > 0.001f)
+                    {
+                        // Vector from end to start
+                        Vector2 dirEndToStart = -dirStartToEnd;
+
+                        if (adjacencyVectors.ContainsKey(road.StartNode.Id))
+                        {
+                            adjacencyVectors[road.StartNode.Id].Add(dirStartToEnd);
+                        }
+                        if (adjacencyVectors.ContainsKey(road.EndNode.Id))
+                        {
+                            adjacencyVectors[road.EndNode.Id].Add(dirEndToStart);
+                        }
+                    }
+                }
+            }
+            
+            // 2. Iterate through intersections, calculate angles between pairs of vectors
+            foreach (var intersectionId in adjacencyVectors.Keys)
+            {
+                var neighbors = adjacencyVectors[intersectionId];
+                
+                // We only calculate angles for nodes with degree 2 or more
+                if (neighbors.Count < 2)
+                {
+                    continue;
+                }
+
+                // Iterate through all unique pairs of neighbor vectors
+                for (int i = 0; i < neighbors.Count; i++)
+                {
+                    for (int j = i + 1; j < neighbors.Count; j++)
+                    {
+                        // Calculate the smallest angle (0-180 degrees) between the two vectors
+                        float angle = Vector2.Angle(neighbors[i], neighbors[j]);
+                        
+                        // Round to nearest degree to avoid float precision issues at bin edges
+                        int roundedAngle = Mathf.RoundToInt(angle);
+
+                        // Ensure angle is clamped (e.g., 180 degrees should be in the correct bin)
+                        if (roundedAngle > 180) roundedAngle = 180;
+                        if (roundedAngle < 0) roundedAngle = 0;
+
+                        // Calculate the lower bound of the bin
+                        // e.g., 93 degrees -> (93 / 15) * 15 -> 6 * 15 -> 90
+                        // e.g., 89 degrees -> (89 / 15) * 15 -> 5 * 15 -> 75
+                        int bin = (roundedAngle / AngleBinSize) * AngleBinSize;
+                        
+                        // Handle the edge case of 180 degrees
+                        if (bin == 180 && AngleBinSize > 0)
+                        {
+                            bin = 180 - AngleBinSize; // Put it in the last bin (e.g., 165-180)
+                        }
+
+                        // Add to histogram
+                        if (!angleHistogram.TryAdd(bin, 1))
+                        {
+                            angleHistogram[bin]++;
+                        }
+                    }
+                }
+            }
+
+            return angleHistogram;
+        }
+        // ----------------------------------------------------
     }
 }

@@ -274,7 +274,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: '::'
   terrain: {fileID: 1956774533}
-  selectedTechnique: 2
+  selectedTechnique: 0
   globalStepLimit: 1000
   maxStepsPerAgent: 50
   stepSize: 10

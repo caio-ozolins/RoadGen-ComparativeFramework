@@ -37,6 +37,14 @@ namespace _Project.Scripts.Evaluation
 
         // --- Geometric ---
         public double AverageCircuity { get; set; } = double.NaN;
+        
+        /// <summary>
+        /// A histogram of intersection angles, grouped into bins.
+        /// The Key (int) is the lower bound of the angle bin (e.g., 0, 15, 30 degrees).
+        /// The Value (int) is the count of angles that fall into that bin.
+        /// </summary>
+        public Dictionary<int, int> IntersectionAngleDistribution { get; set; } = new Dictionary<int, int>();
+
 
         // --- Adaptability ---
         /// <summary>
@@ -72,7 +80,6 @@ namespace _Project.Scripts.Evaluation
                  sb.AppendLine("Degree Distribution: N/A");
             }
             
-            // --- NEW: Format Connectivity Metrics ---
             sb.AppendLine(!double.IsNaN(ConnectivityAlpha)
                 ? $"Connectivity (Alpha Index): {ConnectivityAlpha:F3}"
                 : "Connectivity (Alpha Index): N/A");
@@ -80,11 +87,26 @@ namespace _Project.Scripts.Evaluation
             sb.AppendLine(!double.IsNaN(ConnectivityGamma)
                 ? $"Connectivity (Gamma Index): {ConnectivityGamma:F3}"
                 : "Connectivity (Gamma Index): N/A");
-            // ----------------------------------------
 
             sb.AppendLine(!double.IsNaN(AverageCircuity)
                 ? $"Average Circuity (Detour Index): {AverageCircuity:F3}"
                 : "Average Circuity (Detour Index): N/A");
+
+            // --- NEW: Format Angle Distribution ---
+            if (IntersectionAngleDistribution is { Count: > 0 })
+            {
+                sb.AppendLine("Intersection Angle Distribution (Angle Bin Start: Count):");
+                foreach (var kvp in IntersectionAngleDistribution.OrderBy(pair => pair.Key))
+                {
+                    // e.g., "  0: 4" (Meaning bin 0-14 degrees has 4 angles)
+                    sb.AppendLine($"  {kvp.Key}: {kvp.Value}");
+                }
+            }
+            else
+            {
+                sb.AppendLine("Intersection Angle Distribution: N/A");
+            }
+            // ------------------------------------
 
             sb.AppendLine(!double.IsNaN(AverageRoadSteepness)
                 ? $"Average Road Steepness: {AverageRoadSteepness:F1} degrees"
