@@ -8,6 +8,7 @@ using UnityEngine.UI;
 using Random = UnityEngine.Random;
 using _Project.Scripts.Evaluation;
 using System.Diagnostics;
+using System; // --- NEW: Added for System.GC ---
 
 using Debug = UnityEngine.Debug;
 
@@ -55,7 +56,6 @@ namespace _Project.Scripts
             {
                 case GenerationTechnique.AgentBasedRandomWalk:
                     Debug.Log("[Orchestrator] Initializing AgentBasedRandomWalk generator...");
-                    // --- CORRECTED: Restored full initializer ---
                     generator = new RandomWalkGenerator
                     {
                         Terrain = this.terrain, GlobalStepLimit = this.globalStepLimit, MaxStepsPerAgent = this.maxStepsPerAgent,
@@ -63,7 +63,6 @@ namespace _Project.Scripts
                         TotalBranchingChance = this.totalBranchingChance, MaxGenerationTimeSeconds = this.maxGenerationTimeSeconds,
                         MaxActiveAgents = this.maxActiveAgents
                     };
-                    // ------------------------------------------
                     break;
 
                 case GenerationTechnique.PathBasedAStarPOIs:
@@ -71,26 +70,22 @@ namespace _Project.Scripts
                     int gridWidth = _costMap.Width; int gridHeight = _costMap.Height; Vector2Int centerPoint = new Vector2Int(gridWidth / 2, gridHeight / 2); _pointsOfInterest.Add(centerPoint);
                     for (int i = 1; i < numberOfPointsOfInterest; i++) { Vector2Int randomPoi = new Vector2Int(Random.Range(0, gridWidth), Random.Range(0, gridHeight)); if (!_pointsOfInterest.Contains(randomPoi)) { _pointsOfInterest.Add(randomPoi); } else { i--; } }
                     Debug.Log($"[Orchestrator] Generated {_pointsOfInterest.Count} Points of Interest.");
-                    // --- CORRECTED: Restored full initializer ---
                     var pathGenerator = new PathBasedGenerator
                     {
                         Terrain = this.terrain, CostMap = this._costMap, PointsOfInterest = _pointsOfInterest, MinimumSegmentLength = this.minimumSegmentLength,
                         AddTransversalConnections = this.addTransversalConnections, MaxConnectionDistance = this.maxConnectionDistance, MaxConnectionAttempts = this.maxConnectionAttempts
                     };
                     generator = pathGenerator;
-                    // ------------------------------------------
                     break;
 
                 case GenerationTechnique.LSystem:
                     Debug.Log("[Orchestrator] Initializing LSystem generator...");
-
-                    // --- UPDATED: Use a simpler, standard branching rule set ---
+                    
                     string axiom = "F"; // Start with F
                     var defaultRules = new Dictionary<char, string> {
                         { 'F', "F[+F]F[-F]F" } // Rule: F -> F[+F]F[-F]F
                     };
                     float turnAngle = 25.7f; // Common angle for this rule
-                    // ---------------------------------------------------
 
                     generator = new LSystemGenerator
                     {
@@ -110,15 +105,45 @@ namespace _Project.Scripts
                     return;
             }
 
-            // --- Generation Execution, Timing, Metrics (remain the same) ---
+            // --- Generation Execution, Timing, and Metrics ---
+            
              Debug.Log($"[Orchestrator] Executing {selectedTechnique} generator...");
-             Stopwatch generationStopwatch = new Stopwatch(); generationStopwatch.Start();
+             
+             // --- NEW: Memory Measurement ---
+             // 1. Force garbage collection to get a clean baseline
+             GC.Collect();
+             GC.WaitForPendingFinalizers();
+             long memoryBefore = GC.GetTotalMemory(true);
+             // -----------------------------
+
+             Stopwatch generationStopwatch = new Stopwatch(); 
+             generationStopwatch.Start();
+             
              var result = generator.Generate();
-             generationStopwatch.Stop(); double elapsedSeconds = generationStopwatch.Elapsed.TotalSeconds;
-             _intersections.AddRange(result.intersections); _roads.AddRange(result.roads);
+             
+             generationStopwatch.Stop(); 
+             double elapsedSeconds = generationStopwatch.Elapsed.TotalSeconds;
+             
+             // --- NEW: Memory Measurement ---
+             // 2. Measure memory *after* generation
+             long memoryAfter = GC.GetTotalMemory(false);
+             long memoryUsed = memoryAfter - memoryBefore;
+             // Ensure we don't log negative memory if GC ran mid-generation
+             if (memoryUsed < 0) memoryUsed = 0;
+             // -----------------------------
+             
+             _intersections.AddRange(result.intersections); 
+             _roads.AddRange(result.roads);
+             
              Debug.Log($"[Orchestrator] Generation completed by {selectedTechnique} in {elapsedSeconds:F3} seconds.");
              Debug.Log("[Orchestrator] Calculating metrics...");
-             var calculator = new MetricsCalculator(); MetricsResult metrics = calculator.Calculate(_intersections, _roads, elapsedSeconds);
+             
+             var calculator = new MetricsCalculator();
+             
+             // --- UPDATED: Pass the new 'memoryUsed' parameter ---
+             MetricsResult metrics = calculator.Calculate(_intersections, _roads, elapsedSeconds, memoryUsed);
+             // ----------------------------------------------------
+             
              Debug.Log(metrics.ToString());
         }
 

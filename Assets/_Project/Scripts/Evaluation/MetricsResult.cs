@@ -8,6 +8,13 @@ namespace _Project.Scripts.Evaluation
     {
         // --- Efficiency ---
         public double GenerationTimeSeconds { get; set; }
+        
+        /// <summary>
+        /// The total managed memory (in bytes) allocated by the generation algorithm.
+        /// Measured by forcing GC, recording a baseline, running the algorithm,
+        /// and recording the difference.
+        /// </summary>
+        public long MemoryUsedBytes { get; set; }
 
         // --- Basic Counts ---
         public int IntersectionCount { get; set; } // V (Vertices)
@@ -58,7 +65,15 @@ namespace _Project.Scripts.Evaluation
         {
             var sb = new StringBuilder();
             sb.AppendLine("--- Road Network Metrics ---");
+            
+            // --- Efficiency Metrics ---
             sb.AppendLine($"Generation Time: {GenerationTimeSeconds:F3} s");
+            // Format memory as Megabytes (MB) for readability
+            // ReSharper disable once InconsistentNaming
+            double memoryMB = MemoryUsedBytes / (1024.0 * 1024.0);
+            sb.AppendLine($"Memory Used: {memoryMB:F2} MB ({MemoryUsedBytes} bytes)");
+            
+            // --- Basic Counts ---
             sb.AppendLine($"Intersections (V): {IntersectionCount}");
             sb.AppendLine($"Roads (E): {RoadCount}");
             if (RoadCount > 0)
@@ -67,6 +82,7 @@ namespace _Project.Scripts.Evaluation
                 sb.AppendLine($"Average Road Length: {AverageRoadLength:F1} units");
             }
 
+            // --- Structural (Graph) ---
             if (DegreeDistribution is { Count: > 0 })
             {
                 sb.AppendLine("Degree Distribution (Degree: Count):");
@@ -88,17 +104,16 @@ namespace _Project.Scripts.Evaluation
                 ? $"Connectivity (Gamma Index): {ConnectivityGamma:F3}"
                 : "Connectivity (Gamma Index): N/A");
 
+            // --- Geometric ---
             sb.AppendLine(!double.IsNaN(AverageCircuity)
                 ? $"Average Circuity (Detour Index): {AverageCircuity:F3}"
                 : "Average Circuity (Detour Index): N/A");
-
-            // --- NEW: Format Angle Distribution ---
+            
             if (IntersectionAngleDistribution is { Count: > 0 })
             {
                 sb.AppendLine("Intersection Angle Distribution (Angle Bin Start: Count):");
                 foreach (var kvp in IntersectionAngleDistribution.OrderBy(pair => pair.Key))
                 {
-                    // e.g., "  0: 4" (Meaning bin 0-14 degrees has 4 angles)
                     sb.AppendLine($"  {kvp.Key}: {kvp.Value}");
                 }
             }
@@ -106,8 +121,8 @@ namespace _Project.Scripts.Evaluation
             {
                 sb.AppendLine("Intersection Angle Distribution: N/A");
             }
-            // ------------------------------------
-
+            
+            // --- Adaptability ---
             sb.AppendLine(!double.IsNaN(AverageRoadSteepness)
                 ? $"Average Road Steepness: {AverageRoadSteepness:F1} degrees"
                 : "Average Road Steepness: N/A");

@@ -10,19 +10,19 @@ namespace _Project.Scripts.Evaluation
     {
         private const int CircuitySampleCount = 100;
         
-        // --- NEW: Constant for angle histogram ---
         /// <summary>
         /// Defines the size (in degrees) of each bin for the intersection angle histogram.
         /// E.g., 15 means bins will be 0, 15, 30, 45...
         /// </summary>
         private const int AngleBinSize = 15;
-        // ----------------------------------------
 
-        public MetricsResult Calculate(List<Intersection> intersections, List<Road> roads, double generationTimeSeconds)
+        // --- UPDATED SIGNATURE: Added 'memoryUsedBytes' parameter ---
+        public MetricsResult Calculate(List<Intersection> intersections, List<Road> roads, double generationTimeSeconds, long memoryUsedBytes)
         {
             var result = new MetricsResult
             {
                 GenerationTimeSeconds = generationTimeSeconds,
+                MemoryUsedBytes = memoryUsedBytes, // --- ASSIGNED HERE ---
                 IntersectionCount = intersections?.Count ?? 0,
                 RoadCount = roads?.Count ?? 0
             };
@@ -81,9 +81,8 @@ namespace _Project.Scripts.Evaluation
             // Circuity
             result.AverageCircuity = CalculateCircuity(intersections, roads);
             
-            // --- NEW: Calculate Intersection Angle Distribution ---
+            // Intersection Angle Distribution
             result.IntersectionAngleDistribution = CalculateIntersectionAngleDistribution(intersections, roads);
-            // ----------------------------------------------------
 
             // Average Steepness
             result.AverageRoadSteepness = CalculateAverageSteepness(roads);
@@ -258,11 +257,6 @@ namespace _Project.Scripts.Evaluation
             return componentCount;
         }
         
-        // --- NEW: Method to calculate intersection angles ---
-        /// <summary>
-        /// Calculates the distribution of angles between connected roads at each intersection.
-        /// Angles are measured on the 2D (XZ) plane and grouped into bins.
-        /// </summary>
         private Dictionary<int, int> CalculateIntersectionAngleDistribution(List<Intersection> intersections, List<Road> roads)
         {
             var angleHistogram = new Dictionary<int, int>();
@@ -270,10 +264,7 @@ namespace _Project.Scripts.Evaluation
             {
                 return angleHistogram;
             }
-
-            // 1. Build an adjacency list of 2D direction vectors
-            // Key: Intersection ID
-            // Value: List of normalized 2D (XZ) vectors pointing *away* from this intersection
+            
             var adjacencyVectors = new Dictionary<int, List<Vector2>>();
             foreach (var intersection in intersections)
             {
@@ -284,18 +275,13 @@ namespace _Project.Scripts.Evaluation
             {
                 if (road is { StartNode: not null, EndNode: not null })
                 {
-                    // Get 2D positions (ignoring Y/height)
                     Vector2 startPos = new Vector2(road.StartNode.Position.x, road.StartNode.Position.z);
                     Vector2 endPos = new Vector2(road.EndNode.Position.x, road.EndNode.Position.z);
-
-                    // Vector from start to end
                     Vector2 dirStartToEnd = (endPos - startPos).normalized;
                     
                     if (dirStartToEnd.sqrMagnitude > 0.001f)
                     {
-                        // Vector from end to start
                         Vector2 dirEndToStart = -dirStartToEnd;
-
                         if (adjacencyVectors.ContainsKey(road.StartNode.Id))
                         {
                             adjacencyVectors[road.StartNode.Id].Add(dirStartToEnd);
@@ -308,44 +294,31 @@ namespace _Project.Scripts.Evaluation
                 }
             }
             
-            // 2. Iterate through intersections, calculate angles between pairs of vectors
             foreach (var intersectionId in adjacencyVectors.Keys)
             {
                 var neighbors = adjacencyVectors[intersectionId];
-                
-                // We only calculate angles for nodes with degree 2 or more
                 if (neighbors.Count < 2)
                 {
                     continue;
                 }
-
-                // Iterate through all unique pairs of neighbor vectors
+                
                 for (int i = 0; i < neighbors.Count; i++)
                 {
                     for (int j = i + 1; j < neighbors.Count; j++)
                     {
-                        // Calculate the smallest angle (0-180 degrees) between the two vectors
                         float angle = Vector2.Angle(neighbors[i], neighbors[j]);
-                        
-                        // Round to nearest degree to avoid float precision issues at bin edges
                         int roundedAngle = Mathf.RoundToInt(angle);
 
-                        // Ensure angle is clamped (e.g., 180 degrees should be in the correct bin)
                         if (roundedAngle > 180) roundedAngle = 180;
                         if (roundedAngle < 0) roundedAngle = 0;
-
-                        // Calculate the lower bound of the bin
-                        // e.g., 93 degrees -> (93 / 15) * 15 -> 6 * 15 -> 90
-                        // e.g., 89 degrees -> (89 / 15) * 15 -> 5 * 15 -> 75
+                        
                         int bin = (roundedAngle / AngleBinSize) * AngleBinSize;
                         
-                        // Handle the edge case of 180 degrees
                         if (bin == 180 && AngleBinSize > 0)
                         {
                             bin = 180 - AngleBinSize; // Put it in the last bin (e.g., 165-180)
                         }
-
-                        // Add to histogram
+                        
                         if (!angleHistogram.TryAdd(bin, 1))
                         {
                             angleHistogram[bin]++;
@@ -356,6 +329,5 @@ namespace _Project.Scripts.Evaluation
 
             return angleHistogram;
         }
-        // ----------------------------------------------------
     }
 }
