@@ -19,8 +19,12 @@ namespace _Project.Scripts.Evaluation
                 RoadCount = roads?.Count ?? 0
             };
 
+            // --- Basic Counts ---
+            int v = result.IntersectionCount; // Vertices
+            int e = result.RoadCount; // Edges
+
             // Road Lengths
-            if (result.RoadCount > 0)
+            if (e > 0)
             {
                 if (roads != null)
                 {
@@ -35,13 +39,47 @@ namespace _Project.Scripts.Evaluation
             // Degree Distribution
             result.DegreeDistribution = CalculateDegreeDistribution(intersections, roads);
 
+            // --- Calculate Connectivity Metrics (Alpha & Gamma) ---
+            if (v > 0 && e > 0)
+            {
+                // P (Connected Components)
+                int p = CalculateConnectedComponents(intersections, roads);
+
+                // Alpha Index (Planar Graph): (E - V + P) / (2V - 5P)
+                double alphaDenominator = (2 * v) - (5 * p);
+                if (alphaDenominator > 0)
+                {
+                    result.ConnectivityAlpha = (e - v + p) / alphaDenominator;
+                }
+                else
+                {
+                    result.ConnectivityAlpha = (e - v + p == 0) ? 0 : double.NaN;
+                }
+
+                // Gamma Index (Planar Graph): E / (3V - 6P)
+                double gammaDenominator = (3 * v) - (6 * p);
+                if (gammaDenominator > 0)
+                {
+                    result.ConnectivityGamma = e / gammaDenominator;
+                }
+                else
+                {
+                    result.ConnectivityGamma = double.NaN;
+                }
+            }
+            else
+            {
+                result.ConnectivityAlpha = (v == 0 && e == 0) ? 0 : double.NaN;
+                result.ConnectivityGamma = (v == 0 && e == 0) ? 0 : double.NaN;
+            }
+            // -----------------------------------------------------------
+
             // Circuity
             result.AverageCircuity = CalculateCircuity(intersections, roads);
 
-            // --- NEW: Calculate Average Steepness ---
+            // Average Steepness
             result.AverageRoadSteepness = CalculateAverageSteepness(roads);
-            // ----------------------------------------
-
+            
             return result;
         }
 
@@ -63,6 +101,8 @@ namespace _Project.Scripts.Evaluation
         private double CalculateCircuity(List<Intersection> intersections, List<Road> roads)
         {
              if (intersections == null || roads == null || intersections.Count < 2 || roads.Count == 0) { return double.NaN; }
+             
+             // Build Adjacency List (for Dijkstra)
              var adjacencyList = new Dictionary<int, List<(int, float)>>();
              foreach(var i in intersections) adjacencyList[i.Id] = new List<(int, float)>();
              foreach(var road in roads)
@@ -73,6 +113,7 @@ namespace _Project.Scripts.Evaluation
                      if (length > 0) { adjacencyList[road.StartNode.Id].Add((road.EndNode.Id, length)); adjacencyList[road.EndNode.Id].Add((road.StartNode.Id, length)); }
                  }
              }
+             
              List<double> sampleRatios = new List<double>();
              int validSamples = 0;
              for (int i = 0; i < CircuitySampleCount && validSamples < CircuitySampleCount; i++)
@@ -85,6 +126,7 @@ namespace _Project.Scripts.Evaluation
                  float networkDistance = CalculateShortestPathDistance(start.Id, end.Id, adjacencyList);
                  if (networkDistance >= 0) { double ratio = networkDistance / euclideanDistance; if (ratio >= 0.99) { sampleRatios.Add(ratio); validSamples++; } }
              }
+             
              if (sampleRatios.Count > 0) { return sampleRatios.Average(); }
              else { Debug.LogWarning("[MetricsCalculator] Could not calculate circuity: No valid paths found between sampled points."); return double.NaN; }
         }
@@ -114,11 +156,7 @@ namespace _Project.Scripts.Evaluation
             }
             return -1f;
         }
-
-        // --- NEW: Average Steepness Calculation ---
-        /// <summary>
-        /// Calculates the average steepness (angle in degrees) of all road segments.
-        /// </summary>
+        
         private double CalculateAverageSteepness(List<Road> roads)
         {
             if (roads == null || roads.Count == 0)
@@ -135,17 +173,12 @@ namespace _Project.Scripts.Evaluation
                 {
                     Vector3 startPos = road.StartNode.Position;
                     Vector3 endPos = road.EndNode.Position;
-
-                    // Calculate horizontal distance (ignoring Y component)
+                    
                     float dx = endPos.x - startPos.x;
                     float dz = endPos.z - startPos.z;
                     float horizontalDistance = Mathf.Sqrt(dx * dx + dz * dz);
-
-                    // Calculate vertical distance
                     float verticalDistance = Mathf.Abs(endPos.y - startPos.y);
 
-                    // Calculate steepness angle in degrees
-                    // Avoid division by zero for perfectly vertical segments (though unlikely)
                     if (horizontalDistance > 0.001f)
                     {
                         float angleRad = Mathf.Atan2(verticalDistance, horizontalDistance);
@@ -153,8 +186,6 @@ namespace _Project.Scripts.Evaluation
                         totalSteepness += angleDeg;
                         validRoadCount++;
                     }
-                    // Optional: Handle vertical segments? (Angle = 90 degrees)
-                    // else if (verticalDistance > 0.001f) { totalSteepness += 90.0; validRoadCount++; }
                 }
             }
 
@@ -167,6 +198,73 @@ namespace _Project.Scripts.Evaluation
                 return double.NaN; // No valid roads found to calculate steepness
             }
         }
-        // ------------------------------------------
+        
+        /// <summary>
+        /// Calculates the number of connected components (P) in the graph.
+        /// Uses Breadth-First Search (BFS) to traverse the graph.
+        /// </summary>
+        private int CalculateConnectedComponents(List<Intersection> intersections, List<Road> roads)
+        {
+            if (intersections == null || intersections.Count == 0) return 0;
+
+            // Build a simple adjacency list (neighbor IDs only)
+            var adjacencyList = new Dictionary<int, List<int>>();
+            var allIntersectionIds = new HashSet<int>();
+            
+            foreach (var intersection in intersections)
+            {
+                adjacencyList[intersection.Id] = new List<int>();
+                allIntersectionIds.Add(intersection.Id);
+            }
+
+            if (roads != null)
+            {
+                foreach (var road in roads)
+                {
+                    if (road is { StartNode: not null, EndNode: not null })
+                    {
+                        if (allIntersectionIds.Contains(road.StartNode.Id) && allIntersectionIds.Contains(road.EndNode.Id))
+                        {
+                            adjacencyList[road.StartNode.Id].Add(road.EndNode.Id);
+                            adjacencyList[road.EndNode.Id].Add(road.StartNode.Id);
+                        }
+                    }
+                }
+            }
+
+            var visitedIntersectionIds = new HashSet<int>();
+            int componentCount = 0;
+
+            foreach (var intersection in intersections)
+            {
+                if (!visitedIntersectionIds.Contains(intersection.Id))
+                {
+                    componentCount++;
+                    
+                    var queue = new Queue<int>();
+                    queue.Enqueue(intersection.Id);
+                    visitedIntersectionIds.Add(intersection.Id);
+
+                    while (queue.Count > 0)
+                    {
+                        int currentId = queue.Dequeue();
+                        
+                        if (adjacencyList.TryGetValue(currentId, out var neighbors))
+                        {
+                            foreach (int neighborId in neighbors)
+                            {
+                                // Add() returns 'true' if the item was new (i.e., not visited).
+                                if (visitedIntersectionIds.Add(neighborId))
+                                {
+                                    queue.Enqueue(neighborId);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return componentCount;
+        }
     }
 }

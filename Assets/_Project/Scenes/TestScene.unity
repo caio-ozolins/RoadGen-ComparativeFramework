@@ -289,6 +289,8 @@ MonoBehaviour:
   lSystemAxiom: F
   lSystemIterations: 4
   lSystemTurnAngle: 25
+  lSystemAngleVariance: 5
+  lSystemLengthVariance: 2
   maxGenerationTimeSeconds: 10
   maxActiveAgents: 2000
   debugCostMapImage: {fileID: 1359996889}
