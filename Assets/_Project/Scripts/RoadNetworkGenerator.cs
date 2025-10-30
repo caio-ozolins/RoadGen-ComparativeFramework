@@ -8,7 +8,7 @@ using UnityEngine.UI;
 using Random = UnityEngine.Random;
 using _Project.Scripts.Evaluation;
 using System.Diagnostics;
-using System; // --- NEW: Added for System.GC ---
+using System; 
 
 using Debug = UnityEngine.Debug;
 
@@ -39,20 +39,83 @@ namespace _Project.Scripts
         private readonly List<Vector2Int> _pointsOfInterest = new List<Vector2Int>();
         [Header("Debug")] public RawImage debugCostMapImage;
 
+        /// <summary>
+        /// This method is for manual testing via the Context Menu.
+        /// The ExperimentManager uses InitializeGenerator() and ClearPreviousNetwork() directly.
+        /// </summary>
         [ContextMenu("Generate Road Network")]
         private void Generate()
         {
-            Debug.Log($"[Orchestrator] Starting generation process using: {selectedTechnique}");
+            Debug.Log($"[Orchestrator] (Manual Run) Starting generation process using: {selectedTechnique}");
+            
+            // 1. Clear previous network
             ClearPreviousNetwork();
 
+            // 2. Initialize the selected generator
+            IRoadNetworkGenerator generator;
+            try
+            {
+                generator = InitializeGenerator(selectedTechnique);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[Orchestrator] (Manual Run) Failed to initialize generator: {e.Message}");
+                return;
+            }
+            
+            // --- Generation Execution, Timing, and Metrics ---
+             Debug.Log($"[Orchestrator] (Manual Run) Executing {selectedTechnique} generator...");
+             
+             // --- Memory Measurement ---
+             GC.Collect();
+             GC.WaitForPendingFinalizers();
+             long memoryBefore = GC.GetTotalMemory(true);
+
+             Stopwatch generationStopwatch = new Stopwatch(); 
+             generationStopwatch.Start();
+             
+             var result = generator.Generate();
+             
+             generationStopwatch.Stop(); 
+             double elapsedSeconds = generationStopwatch.Elapsed.TotalSeconds;
+             
+             long memoryAfter = GC.GetTotalMemory(false);
+             long memoryUsed = memoryAfter - memoryBefore;
+             if (memoryUsed < 0) memoryUsed = 0;
+             
+             _intersections.AddRange(result.intersections); 
+             _roads.AddRange(result.roads);
+             
+             Debug.Log($"[Orchestrator] (Manual Run) Generation completed by {selectedTechnique} in {elapsedSeconds:F3} seconds.");
+             Debug.Log("[Orchestrator] (Manual Run) Calculating metrics...");
+             
+             var calculator = new MetricsCalculator();
+             MetricsResult metrics = calculator.Calculate(_intersections, _roads, elapsedSeconds, memoryUsed);
+             
+             Debug.Log(metrics.ToString());
+        }
+        
+        /// <summary>
+        /// --- NEW PUBLIC METHOD ---
+        /// Initializes and returns a generator instance based on the selected technique.
+        /// This is called by ExperimentManager.
+        /// </summary>
+        public IRoadNetworkGenerator InitializeGenerator(GenerationTechnique technique)
+        {
+            // Note: CostMap and POIs are (re)generated here for *each* technique initialization.
+            // This ensures a fair comparison if techniques modify these lists.
+            
             Debug.Log("[Orchestrator] Analysis Phase: Generating Cost Map...");
             var costMapGenerator = new CostMapGenerator();
             _costMap = costMapGenerator.Generate(this.terrain);
-            if (_costMap == null) { Debug.LogError("[Orchestrator] Cost Map generation failed. Aborting road network generation."); return; }
+            if (_costMap == null)
+            {
+                throw new Exception("[Orchestrator] Cost Map generation failed. Aborting road network generation.");
+            }
 
             _pointsOfInterest.Clear();
             IRoadNetworkGenerator generator;
-            switch (selectedTechnique)
+            switch (technique)
             {
                 case GenerationTechnique.AgentBasedRandomWalk:
                     Debug.Log("[Orchestrator] Initializing AgentBasedRandomWalk generator...");
@@ -90,9 +153,9 @@ namespace _Project.Scripts
                     generator = new LSystemGenerator
                     {
                         Terrain = this.terrain,
-                        Axiom = axiom, // Use the simple axiom
+                        Axiom = axiom,
                         Iterations = this.lSystemIterations,
-                        TurnAngle = turnAngle, // Use the specific angle
+                        TurnAngle = turnAngle,
                         SegmentLength = this.stepSize,
                         Rules = defaultRules,
                         AngleVariance = this.lSystemAngleVariance,
@@ -101,63 +164,21 @@ namespace _Project.Scripts
                     break;
 
                 default:
-                    Debug.LogError($"[Orchestrator] Unknown GenerationTechnique selected: {selectedTechnique}");
-                    return;
+                    throw new ArgumentOutOfRangeException(nameof(technique), $"[Orchestrator] Unknown GenerationTechnique selected: {technique}");
             }
-
-            // --- Generation Execution, Timing, and Metrics ---
             
-             Debug.Log($"[Orchestrator] Executing {selectedTechnique} generator...");
-             
-             // --- NEW: Memory Measurement ---
-             // 1. Force garbage collection to get a clean baseline
-             GC.Collect();
-             GC.WaitForPendingFinalizers();
-             long memoryBefore = GC.GetTotalMemory(true);
-             // -----------------------------
-
-             Stopwatch generationStopwatch = new Stopwatch(); 
-             generationStopwatch.Start();
-             
-             var result = generator.Generate();
-             
-             generationStopwatch.Stop(); 
-             double elapsedSeconds = generationStopwatch.Elapsed.TotalSeconds;
-             
-             // --- NEW: Memory Measurement ---
-             // 2. Measure memory *after* generation
-             long memoryAfter = GC.GetTotalMemory(false);
-             long memoryUsed = memoryAfter - memoryBefore;
-             // Ensure we don't log negative memory if GC ran mid-generation
-             if (memoryUsed < 0) memoryUsed = 0;
-             // -----------------------------
-             
-             _intersections.AddRange(result.intersections); 
-             _roads.AddRange(result.roads);
-             
-             Debug.Log($"[Orchestrator] Generation completed by {selectedTechnique} in {elapsedSeconds:F3} seconds.");
-             Debug.Log("[Orchestrator] Calculating metrics...");
-             
-             var calculator = new MetricsCalculator();
-             
-             // --- UPDATED: Pass the new 'memoryUsed' parameter ---
-             MetricsResult metrics = calculator.Calculate(_intersections, _roads, elapsedSeconds, memoryUsed);
-             // ----------------------------------------------------
-             
-             Debug.Log(metrics.ToString());
+            return generator;
         }
 
-        // ... (OnDrawGizmos, ClearPreviousNetwork, VisualizeCostMap, ConvertGridToWorldPosition remain unchanged) ...
+
+        // ... (OnDrawGizmos remains unchanged) ...
         
         private void OnDrawGizmos()
         {
-            // Draw existing network
             Gizmos.color = Color.white;
             foreach (var road in _roads) { if (road is { StartNode: not null, EndNode: not null }) { Gizmos.DrawLine(road.StartNode.Position, road.EndNode.Position); } }
             Gizmos.color = Color.red;
             foreach (var intersection in _intersections) { Gizmos.DrawSphere(intersection.Position, 1.0f); }
-
-            // Draw POIs if relevant
              if (selectedTechnique == GenerationTechnique.PathBasedAStarPOIs && _pointsOfInterest != null && terrain is { terrainData: not null })
              {
                  Gizmos.color = Color.yellow;
@@ -170,7 +191,22 @@ namespace _Project.Scripts
              }
         }
         
-        [ContextMenu("Clear Road Network")] private void ClearPreviousNetwork() { Debug.Log("[Orchestrator] Clearing previous network..."); _intersections.Clear(); _roads.Clear(); _pointsOfInterest.Clear(); }
+        /// <summary>
+        /// --- NEW: CHANGED TO PUBLIC ---
+        /// Clears the internal lists of roads and intersections.
+        /// This is called by ExperimentManager.
+        /// </summary>
+        [ContextMenu("Clear Road Network")] 
+        public void ClearPreviousNetwork() 
+        { 
+            Debug.Log("[Orchestrator] Clearing previous network..."); 
+            _intersections.Clear(); 
+            _roads.Clear(); 
+            _pointsOfInterest.Clear(); 
+        }
+        
+        // ... (ConvertGridToWorldPosition and VisualizeCostMap remain unchanged) ...
+        
         private Vector3 ConvertGridToWorldPosition(Vector2Int gridPoint) { if (terrain == null || terrain.terrainData == null) return Vector3.zero; TerrainData terrainData = terrain.terrainData; int gridWidth = terrainData.heightmapResolution; int gridHeight = terrainData.heightmapResolution; int x = Mathf.Clamp(gridPoint.x, 0, gridWidth - 1); int y = Mathf.Clamp(gridPoint.y, 0, gridHeight - 1); float normX = (float)x / (gridWidth - 1); float normZ = (float)y / (gridHeight - 1); float worldX = (normX * terrainData.size.x) + terrain.transform.position.x; float worldZ = (normZ * terrainData.size.z) + terrain.transform.position.z; float worldY = terrain.SampleHeight(new Vector3(worldX, 0, worldZ)); return new Vector3(worldX, worldY, worldZ); }
         [ContextMenu("Visualize Cost Map")] private void VisualizeCostMap() { if (_costMap == null) { Debug.LogWarning("[Orchestrator] Cost Map has not been generated yet. Please run 'Generate Road Network' first."); return; } if (debugCostMapImage == null) { Debug.LogWarning("[Orchestrator] No RawImage assigned to 'debugCostMapImage' field. Cannot visualize cost map."); return; } int width = _costMap.Width; int height = _costMap.Height; Texture2D costMapTexture = new Texture2D(width, height); float maxCost = 0f; for (int y = 0; y < height; y++) { for (int x = 0; x < width; x++) { if (_costMap.GetCost(x, y) > maxCost) { maxCost = _costMap.GetCost(x, y); } } } if (Mathf.Approximately(maxCost, 0)) maxCost = 1.0f; for (int y = 0; y < height; y++) { for (int x = 0; x < width; x++) { float cost = _costMap.GetCost(x, y); float normalizedCost = cost / maxCost; Color pixelColor = new Color(normalizedCost, normalizedCost, normalizedCost); costMapTexture.SetPixel(x, y, pixelColor); } } costMapTexture.Apply(); debugCostMapImage.texture = costMapTexture; Debug.Log($"[Orchestrator] Cost map visualized. Max cost found: {maxCost}"); }
 

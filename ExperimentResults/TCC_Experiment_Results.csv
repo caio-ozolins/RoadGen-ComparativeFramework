@@ -1,0 +1,10 @@
+Scenario,Technique,Repetition,GenerationTime_s,MemoryUsed_bytes,IntersectionCount_V,RoadCount_E,TotalRoadLength,AverageRoadLength,Connectivity_Alpha,Connectivity_Gamma,AverageCircuity,AverageRoadSteepness,Degree_0_Count,Degree_1_Count,Degree_2_Count,Degree_3_Count,Degree_4_Count,Degree_5_Count,Degree_6_Count,Degree_7_Count,Degree_8_Count,Degree_9_Count,Degree_10_Count,Degree_Other_Count,Angle_0_Count,Angle_15_Count,Angle_30_Count,Angle_45_Count,Angle_60_Count,Angle_75_Count,Angle_90_Count,Angle_105_Count,Angle_120_Count,Angle_135_Count,Angle_150_Count,Angle_165_Count
+DefaultScenario,AgentBasedRandomWalk,1,0.004291,24576,304,303,3096.09,10.22,0.000000,0.334437,2.966556,9.79,0,26,254,24,0,0,0,0,0,0,0,0,0,0,0,0,3,19,23,3,0,0,0,278
+DefaultScenario,AgentBasedRandomWalk,2,0.000652,24576,355,354,3619.18,10.22,0.000000,0.334278,2.979278,9.73,0,25,307,23,0,0,0,0,0,0,0,0,0,0,0,0,2,16,24,4,0,0,0,330
+DefaultScenario,AgentBasedRandomWalk,3,0.000812,24576,487,486,4963.56,10.21,0.000000,0.334021,3.036391,9.55,0,34,421,32,0,0,0,0,0,0,0,0,0,0,0,0,4,31,27,4,0,0,0,451
+DefaultScenario,PathBasedAStarPOIs,1,18.839428,125661184,185,228,3039.31,13.33,0.120548,0.415301,1.306082,8.33,0,8,113,45,11,5,3,0,0,0,0,0,31,14,13,22,21,10,32,4,34,53,61,114
+DefaultScenario,PathBasedAStarPOIs,2,15.910999,170668032,154,193,2536.17,13.14,0.132013,0.423246,1.363466,6.99,0,5,97,30,15,6,0,1,0,0,0,0,43,17,11,20,10,13,14,8,17,38,52,115
+DefaultScenario,PathBasedAStarPOIs,3,14.319897,170614784,154,187,2471.28,13.22,0.112211,0.410088,1.417914,8.51,0,6,91,45,10,1,1,0,0,0,0,0,33,11,6,8,14,12,22,7,16,29,53,100
+DefaultScenario,LSystem,1,0.003547,16384,135,134,1383.25,10.32,0.000000,0.335840,1.888577,10.80,0,77,2,55,0,0,0,0,0,0,0,1,61,87,7,0,0,0,5,23,55,29,75,56
+DefaultScenario,LSystem,2,0.001195,16384,151,150,1492.52,9.95,0.000000,0.335570,2.870256,9.76,0,91,2,57,0,0,0,0,0,0,0,1,231,75,7,0,0,1,121,127,57,3,55,57
+DefaultScenario,LSystem,3,0.001098,16384,133,132,1317.20,9.98,0.000000,0.335878,1.848308,10.75,0,69,2,61,0,0,0,0,1,0,0,0,6,57,12,3,3,2,1,0,1,3,63,62
