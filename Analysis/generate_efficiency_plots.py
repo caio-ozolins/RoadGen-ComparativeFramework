@@ -87,16 +87,12 @@ def add_bar_annotations(
             std_val = float(std_val_raw)
 
         # Calculate Y position
-        # --- CHANGE: Adjusted y_position logic to be more robust for linear scale ---
-        # Use a small fixed offset above the error bar
         y_position = (mean_val + std_val) * 1.02
 
-        # If std is 0, place it just above the mean bar
         if std_val == 0:
             y_position = mean_val * 1.02
 
-        # Use fixed precision for simplicity, as we aren't always log-scaling
-        # (This logic can be adjusted if needed)
+        # Format the text label
         if mean_val < 1.0:
             text_label = f"({mean_val:.{precision_low}f} {unit})"
         else:
@@ -109,7 +105,7 @@ def add_bar_annotations(
             text_label,
             color='black',
             ha='center',
-            va='bottom',  # Place text 'bottom' (anchored at bottom)
+            va='bottom',
             fontsize=10
         )
 
@@ -134,13 +130,11 @@ def create_efficiency_plots(df, df_summary_ordered):
         yerr=df_summary_ordered[('GenerationTime_s', 'std')],
         fmt='none', c='black', capsize=5
     )
-    # Eficiência MANTÉM a escala log
     ax_time.set_yscale('log')
     ax_time.set_title('Comparação do Tempo Médio de Geração por Técnica (30 Repetições)', fontsize=16)
     ax_time.set_xlabel('Técnica de Geração', fontsize=12)
     ax_time.set_ylabel('Tempo Médio de Geração (segundos, escala log)', fontsize=12)
 
-    # --- Re-using the annotation helper ---
     add_bar_annotations(
         ax=ax_time, df=df_summary_ordered,
         col_mean=('GenerationTime_s', 'mean'), col_std=('GenerationTime_s', 'std'),
@@ -161,13 +155,11 @@ def create_efficiency_plots(df, df_summary_ordered):
         yerr=df_summary_ordered[('MemoryUsed_MB', 'std')],
         fmt='none', c='black', capsize=5
     )
-    # Eficiência MANTÉM a escala log
     ax_mem.set_yscale('log')
     ax_mem.set_title('Comparação do Uso Médio de Memória por Técnica (30 Repetições)', fontsize=16)
     ax_mem.set_xlabel('Técnica de Geração', fontsize=12)
     ax_mem.set_ylabel('Uso Médio de Memória (Megabytes, escala log)', fontsize=12)
 
-    # --- Re-using the annotation helper ---
     add_bar_annotations(
         ax=ax_mem, df=df_summary_ordered,
         col_mean=('MemoryUsed_MB', 'mean'), col_std=('MemoryUsed_MB', 'std'),
@@ -180,7 +172,7 @@ def create_efficiency_plots(df, df_summary_ordered):
     print(f"Saved: {memory_plot_path}")
 
 
-# --- 5. CHANGE: Generate Structural Realism Plots (Bar Charts) ---
+# --- 5. Generate Structural Realism Plots (Objective 7.4.2) ---
 def create_structural_realism_plots(df, df_summary_ordered):
     """
     Generates and saves the Structural Realism comparison plots (Bar Charts).
@@ -197,17 +189,17 @@ def create_structural_realism_plots(df, df_summary_ordered):
         'IntersectionCount_V': (
             'Contagem Média de Intersecções por Técnica (30 Repetições)',
             'Número Médio de Intersecções',
-            '', 1  # Unidade, Precisão
+            '', 1  # Unit, Precision
         ),
         'AverageRoadLength': (
             'Comprimento Médio de Segmento por Técnica (30 Repetições)',
             'Comprimento Médio (metros)',
-            'm', 1  # Unidade, Precisão
+            'm', 1  # Unit, Precision
         ),
         'AverageCircuity': (
             'Circuidade Média da Malha por Técnica (30 Repetições)',
             'Circuidade Média (Índice)',
-            '', 3  # Unidade, Precisão
+            '', 3  # Unit, Precision
         )
     }
 
@@ -241,7 +233,7 @@ def create_structural_realism_plots(df, df_summary_ordered):
         ax.set_xlabel('Técnica de Geração', fontsize=12)
         ax.set_ylabel(ylabel, fontsize=12)
 
-        # We DO NOT use log scale here, as these metrics are usually linear
+        # We DO NOT use log scale here
 
         # Call the annotation helper
         add_bar_annotations(
@@ -261,6 +253,78 @@ def create_structural_realism_plots(df, df_summary_ordered):
         print(f"Saved: {plot_path}")
 
 
+# --- 6. NEW: Generate Functional Adaptability Plots (Objective 7.4.3) ---
+def create_functional_adaptability_plots(df, df_summary_ordered):
+    """
+    Generates and saves the Functional Adaptability comparison plots (Bar Charts).
+    """
+    if df is None:
+        print("Cannot create adaptability plots. Data not loaded.")
+        return
+
+    print("Generating Functional Adaptability plots (Bar Charts)...")
+
+    # Define the metrics to plot
+    # (Column Name, Plot Title, Y-Axis Label, Unit, Precision)
+    metrics_to_plot_details = {
+        'AverageRoadSteepness': (
+            'Adaptação Média ao Terreno por Técnica (30 Repetições)',
+            'Inclinação Média da Via (Índice)',
+            '', 3  # Unit, Precision
+        )
+    }
+
+    # Loop through each metric and create a plot
+    # (i will start at 0, 0+6=6, so filename will be '06_...')
+    for i, (metric, (title, ylabel, unit, precision)) in enumerate(metrics_to_plot_details.items()):
+
+        # Check if the metric (mean) column exists in the summary dataframe
+        if (metric, 'mean') not in df_summary_ordered.columns:
+            print(f"Warning: Metric '{metric}' not found in aggregated data. Skipping plot.")
+            continue
+
+        plt.figure(figsize=(10, 7))
+
+        # Use barplot on the pre-aggregated, ordered data
+        ax = sns.barplot(
+            x='Technique',
+            y=(metric, 'mean'),
+            data=df_summary_ordered,
+            capsize=0.1
+        )
+
+        # Add the error bars
+        plt.errorbar(
+            x=df_summary_ordered['Technique'],
+            y=df_summary_ordered[(metric, 'mean')],
+            yerr=df_summary_ordered[(metric, 'std')],
+            fmt='none', c='black', capsize=5
+        )
+
+        ax.set_title(title, fontsize=16)
+        ax.set_xlabel('Técnica de Geração', fontsize=12)
+        ax.set_ylabel(ylabel, fontsize=12)
+
+        # We DO NOT use log scale here
+
+        # Call the annotation helper
+        add_bar_annotations(
+            ax=ax, df=df_summary_ordered,
+            col_mean=(metric, 'mean'), col_std=(metric, 'std'),
+            unit=unit, precision_low=precision, precision_high=precision
+        )
+
+        plt.tight_layout()
+
+        # Use a consistent naming convention (06...)
+        plot_filename = f"{i + 6:02d}_adaptability_{metric.lower()}_barchart.png"
+        plot_path = os.path.join(PLOT_OUTPUT_DIR, plot_filename)
+
+        plt.savefig(plot_path)
+        plt.close()
+        print(f"Saved: {plot_path}")
+
+
 # --- Main execution ---
 if __name__ == "__main__":
     setup_analysis()
@@ -273,7 +337,8 @@ if __name__ == "__main__":
         # --- NEW: Aggregate ALL data ONCE at the start ---
         metrics_to_aggregate = [
             'GenerationTime_s', 'MemoryUsed_MB',
-            'IntersectionCount_V', 'AverageRoadLength', 'AverageCircuity'
+            'IntersectionCount_V', 'AverageRoadLength', 'AverageCircuity',
+            'AverageRoadSteepness'  # <-- ADDED THIS METRIC
         ]
 
         # Filter list to only metrics that actually exist in the CSV
@@ -301,5 +366,8 @@ if __name__ == "__main__":
 
         # Call the structural realism plots function
         create_structural_realism_plots(dataframe, df_summary_ordered)
+
+        # --- NEW: Call the adaptability plots function ---
+        create_functional_adaptability_plots(dataframe, df_summary_ordered)
 
         print("Analysis script finished.")
